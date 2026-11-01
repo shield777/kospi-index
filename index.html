@@ -64,7 +64,10 @@ h2{font-size:13px;font-weight:500;color:var(--muted);margin:0 0 10px;letter-spac
 .warn.on .s{color:var(--warn)}
 .warn .d{font-size:12px;color:var(--muted)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.seg button{font:inherit;font-size:13px;border:0;background:transparent;color:var(--muted);padding:6px 12px;cursor:pointer}
+.seg button{font:inherit;font-size:13px;border:0;background:transparent;color:var(--muted);padding:6px 11px;cursor:pointer}
+.rng{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;flex-wrap:wrap}
+.ysel{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:5px 8px;max-width:100%}
+.ysel:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
 .seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .chart-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
@@ -124,9 +127,14 @@ td.j{text-align:left}
   <section class="card" aria-label="차트">
     <div class="chart-head">
       <h2 style="margin:0">코스피와 지수</h2>
-      <div class="seg" role="group" aria-label="기간">
-        <button id="r1" aria-pressed="true">2023년~</button>
-        <button id="r2" aria-pressed="false">전체</button>
+      <div class="rng">
+        <div class="seg" role="group" aria-label="기간" id="seg">
+          <button data-r="y1" aria-pressed="false">1년</button>
+          <button data-r="y3" aria-pressed="false">3년</button>
+          <button data-r="y5" aria-pressed="false">5년</button>
+          <button data-r="all" aria-pressed="false">전체</button>
+        </div>
+        <select class="ysel" id="ysel" aria-label="차트 시작 연도"></select>
       </div>
     </div>
     <div class="legend">
@@ -260,32 +268,50 @@ if(REC&&REC.n>=6){
 
 /* 차트 */
 let chart;
-function draw(start){
-  const st=start?D.lab.indexOf(start):0, idx=[...Array(n-st).keys()].map(i=>i+st);
+function draw(st){
+  const idx=[...Array(n-st).keys()].map(i=>i+st);
   const lab=idx.map(i=>D.lab[i]), K=idx.map(i=>D.k[i]), A=idx.map(i=>D.c1[i]);
   const flag=idx.map(i=>D.c1[i]>=105?1:(judge(i).k==='alarm'?-1:0));
   const C={k:css('--kospi'),a:css('--accent'),b:css('--warn'),grid:css('--line'),m:css('--muted'),up:css('--up-soft'),dn:css('--down-soft')};
   const shade={id:'sh',beforeDatasetsDraw(c){const{ctx,chartArea:ar,scales:{x}}=c;const w=(ar.right-ar.left)/lab.length;ctx.save();flag.forEach((f,i)=>{if(!f)return;ctx.fillStyle=f>0?C.up:C.dn;ctx.fillRect(x.getPixelForValue(i)-w/2,ar.top,w+.5,ar.bottom-ar.top);});ctx.restore();}};
   const ref=(y,dash)=>({data:lab.map(()=>y),borderColor:C.m,borderWidth:1,borderDash:dash,pointRadius:0,yAxisID:'y2',ref:1});
-  const full=!start;
+  const span=idx.length, full=span>84, mid=span>36;   // 7년 넘으면 로그 눈금·2년 간격, 3년 넘으면 1년 간격
   if(chart) chart.destroy();
   Chart.defaults.font.family=css('--f-body');Chart.defaults.color=C.m;Chart.defaults.font.size=11;
   chart=new Chart(document.getElementById('ch'),{type:'line',data:{labels:lab,datasets:[
     {label:'코스피',data:K,borderColor:C.k,borderWidth:2,pointRadius:0,tension:.15,yAxisID:'y'},
-    {label:'조합 1',data:A,borderColor:C.a,borderWidth:2,pointRadius:full?0:2,pointBackgroundColor:C.a,tension:.15,yAxisID:'y2'},
+    {label:'조합 1',data:A,borderColor:C.a,borderWidth:2,pointRadius:span>48?0:2,pointBackgroundColor:C.a,tension:.15,yAxisID:'y2'},
     ref(100,[]),ref(105,[3,3]),ref(95,[3,3])]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},tooltip:{filter:c=>!c.dataset.ref,callbacks:{title:c=>c[0].label.replace('-','.'),label:c=>c.datasetIndex===0?' 코스피 '+Math.round(c.raw).toLocaleString():' '+c.dataset.label+' '+c.raw.toFixed(1)}}},
-      scales:{x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:0,callback:(v,i)=>{const m=lab[i].slice(5),y=lab[i].slice(2,4);if(full)return m==='01'&&(+lab[i].slice(0,4))%2===0?"'"+y:'';return m==='01'?"'"+y:(m==='07'?'7월':'');}}},
-        y:{type:full?'logarithmic':'linear',position:'left',grid:{color:C.grid},ticks:{maxTicksLimit:6,callback:v=>full?([2000,3000,4000,6000,8000].includes(v)?v.toLocaleString():''):v.toLocaleString()}},
+      scales:{x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:0,callback:(v,i)=>{const m=lab[i].slice(5),y=lab[i].slice(2,4);if(full)return m==='01'&&(+lab[i].slice(0,4))%2===0?"'"+y:'';return m==='01'?"'"+y:(!mid&&m==='07'?'7월':'');}}},
+        y:{type:full?'logarithmic':'linear',position:'left',grid:{color:C.grid},ticks:{maxTicksLimit:6,callback:v=>full?([1000,2000,3000,4000,6000,8000,10000,20000,30000].includes(v)?v.toLocaleString():''):v.toLocaleString()}},
         y2:{position:'right',min:80,max:120,grid:{display:false},ticks:{stepSize:5,color:C.a}}}},plugins:[shade]});
 }
-const b1=document.getElementById('r1'),b2=document.getElementById('r2');
-function setR(full){b1.setAttribute('aria-pressed',!full);b2.setAttribute('aria-pressed',full);draw(full?null:'2023-01');try{localStorage.setItem('range',full?'all':'2023')}catch(e){}}
-b1.onclick=()=>setR(false);b2.onclick=()=>setR(true);
-let saved='2023';try{saved=localStorage.getItem('range')||'2023'}catch(e){}
-setR(saved==='all');
-matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>setR(b2.getAttribute('aria-pressed')==='true'));
+/* 기간 선택: 1년·3년·5년·전체 버튼 또는 시작 연도 직접 선택 (휴대폰마다 마지막 선택 기억) */
+const seg=document.getElementById('seg'), ysel=document.getElementById('ysel');
+const y0=+D.lab[0].slice(0,4), y1=+D.lab[last].slice(0,4);
+let opt='<option value="" disabled>시작 연도</option>';
+for(let y=y0;y<=y1;y++){const i=D.lab.findIndex(l=>+l.slice(0,4)===y);if(i>=0&&i<last)opt+='<option value="f'+D.lab[i]+'">'+y+'년~</option>';}
+ysel.innerHTML=opt;
+let cur='f2023-01';
+function startOf(r){
+  if(r==='all')return 0;
+  if(r[0]==='y')return Math.max(0,last-12*(+r.slice(1)));
+  const i=D.lab.indexOf(r.slice(1));return i>=0?i:Math.max(0,last-36);
+}
+function setR(r,save){
+  cur=r;
+  seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===r));
+  ysel.value=[...ysel.options].some(o=>o.value===r)?r:'';
+  draw(startOf(r));
+  if(save)try{localStorage.setItem('range2',r)}catch(e){}
+}
+seg.querySelectorAll('button').forEach(b=>b.onclick=()=>setR(b.dataset.r,true));
+ysel.onchange=()=>{if(ysel.value)setR(ysel.value,true)};
+let saved=null;try{saved=localStorage.getItem('range2')||(localStorage.getItem('range')==='all'?'all':null)}catch(e){}
+setR(saved&&/^(all|y\d+|f\d{4}-\d{2})$/.test(saved)?saved:'f2023-01');
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>setR(cur));
 </script>
 </body>
 </html>
