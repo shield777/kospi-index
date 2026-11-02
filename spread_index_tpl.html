@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261102-222636">
+<meta name="build" content="20261102-222948">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -596,7 +596,15 @@ setR(saved&&/^(all|y\d+|f\d{4}-\d{2})$/.test(saved)?saved:'f2023-01');
 /* ───────── 공통: 작은 차트 도구 ───────── */
 const SC=()=>({c:[css('--c1'),css('--c2'),css('--c3'),css('--c4')],grid:css('--grid'),axis:css('--axis'),m:css('--muted'),ink:css('--ink'),ink2:css('--ink2'),surf:css('--surface'),blue:css('--blue'),red:css('--red'),F:css('--f')});
 const charts={}; window.__charts=charts;  // (점검용)
-function mk(key,el,cfg){if(typeof Chart==='undefined'||!el)return;if(charts[key])charts[key].destroy();const K=SC();Chart.defaults.font.family=K.F;Chart.defaults.color=K.m;Chart.defaults.font.size=11;charts[key]=new Chart(el,cfg);}
+const AXIS_W=50, PAD_R=18;      // 차트 그림 영역의 시작·끝을 모든 카드에서 맞추기 위한 값
+function alignCfg(cfg){
+  const o=cfg.options=cfg.options||{}; o.layout=o.layout||{}; o.layout.padding=Object.assign({top:4},o.layout.padding||{},{right:PAD_R});
+  const sc=o.scales||{};
+  Object.keys(sc).forEach(k=>{if(k[0]==='y'){const prev=sc[k].afterFit;sc[k].afterFit=a=>{if(prev)prev(a);a.width=AXIS_W;};}});
+  if(cfg.type==='line'&&cfg.data.datasets.some(d=>d.type==='bar')&&sc.x) sc.x.offset=false;   // 선+막대: 선이 양 끝까지
+  return cfg;
+}
+function mk(key,el,cfg){if(typeof Chart==='undefined'||!el)return;cfg=alignCfg(cfg);if(charts[key])charts[key].destroy();const K=SC();Chart.defaults.font.family=K.F;Chart.defaults.color=K.m;Chart.defaults.font.size=11;charts[key]=new Chart(el,cfg);}
 const nf=(v,dec)=>v==null||isNaN(v)?'–':Number(v).toLocaleString('ko-KR',{minimumFractionDigits:dec,maximumFractionDigits:dec});
 const arrow=(dv,dec)=>dv==null||isNaN(dv)?'–':(dv>0?'▲ ':dv<0?'▼ ':'')+nf(Math.abs(dv),dec);
 const lastI=a=>{if(!a)return -1;for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return i;return -1};
@@ -766,7 +774,7 @@ function drawMacro(){
       mk('m-flow',el,{type:'bar',data:{labels:fl,datasets:ds},
         options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},
           plugins:{legend:{display:false},tooltip:tipOf(j=>ymLabel(fl[j])+(fl[j]===D.lab[last]&&CUR.provisional?' (진행 중)':''),v=>(v>0?'+':v<0?'−':'')+nf(Math.abs(v),2)+'조')},
-          scales:{x:{grid:{display:false},border:{color:K.axis},ticks:{maxRotation:0,autoSkip:false,callback:(v,j)=>{const m=+fl[j].slice(5,7);return m===1?"'"+fl[j].slice(2,4):(j%2===(fl.length-1)%2?m+'월':'');}}},
+          scales:{x:{grid:{display:false},border:{color:K.axis},ticks:{maxRotation:0,autoSkip:false,padding:6,callback:(v,j)=>{const m=+fl[j].slice(5,7);return m===1?"'"+fl[j].slice(2,4):(j%2===(fl.length-1)%2?m+'월':'');}}},
             y:{border:{display:false},grid:{color:K.grid,drawTicks:false},ticks:{padding:8,maxTicksLimit:5,callback:v=>nf(v,0)}}}},
         plugins:[refLine(0)]});
     }else{
@@ -867,7 +875,10 @@ function drawAux(){
     }else if(g.kind==='vk'){
       const data=get('VKOSPI'), mx=Math.max(45,...data.filter(v=>v!=null))*1.05, stp=mx>60?20:10;
       const cfg=lineCfg({lab,ds:[{name:'VKOSPI',data,color:K.c[0]}],tick,fmt:v=>nf(v,2)+' · '+vkLevel(v),title,ymin:0,ymax:Math.ceil(mx/stp)*stp});
-      cfg.options.scales.y.ticks.stepSize=stp; cfg.options.scales.y.ticks.maxTicksLimit=8; cfg.options.layout.padding.right=40;
+      const ymax=Math.ceil(mx/stp)*stp, tks=[0,20,30,40]; for(let v=40+stp;v<=ymax;v+=stp) tks.push(v);
+      cfg.options.scales.y.afterBuildTicks=a=>{a.ticks=tks.filter(v=>v<=ymax).map(v=>({value:v}));};
+      cfg.options.scales.y.ticks.callback=v=>v===20?'경계 20':v===30?'불안 30':v===40?'공포 40':nf(v,0);
+      cfg.options.scales.y.ticks.autoSkip=false;
       cfg.plugins.push({id:'vkband',beforeDatasetsDraw(c){const {ctx,chartArea:ar,scales:{y}}=c;ctx.save();
         const band=(a,b,col)=>{const t=y.getPixelForValue(Math.min(b,y.max)),bt=y.getPixelForValue(a);if(bt<=t)return;ctx.fillStyle=col;ctx.fillRect(ar.left,t,ar.right-ar.left,bt-t);};
         band(30,40,css('--red-wash'));band(40,y.max,css('--red-wash'));band(40,y.max,css('--red-wash'));
@@ -875,7 +886,7 @@ function drawAux(){
         afterDatasetsDraw(c){const {ctx,chartArea:ar,scales:{y}}=c;ctx.save();ctx.font='600 10px '+K.F;ctx.textBaseline='middle';ctx.textAlign='left';
         [[20,'경계'],[30,'불안'],[40,'공포']].forEach(([v,t])=>{if(v>y.max)return;const p=Math.round(y.getPixelForValue(v))+.5;
           ctx.strokeStyle=css('--axis');ctx.lineWidth=1;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(ar.left,p);ctx.lineTo(ar.right,p);ctx.stroke();
-          ctx.fillStyle=K.ink2;ctx.fillText(t,ar.right+6,p);});      // 기준 이름은 차트 오른쪽 바깥에 (선을 가리지 않게)
+          });      // 기준 이름은 세로축 숫자 자리에 표시
         ctx.restore();}});
       mk('a-vk',el,cfg);
     }else{
