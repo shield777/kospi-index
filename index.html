@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261102-222411">
+<meta name="build" content="20261102-222636">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -188,6 +188,8 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 .chip2 .m2::before{content:' · '}
 @media (max-width:899px){
   #p-macro .chips,#p-aux .chips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;align-items:start}
+  #p-macro .chips.few,#p-aux .chips.few{grid-auto-columns:minmax(0,max-content);column-gap:22px}   /* 2~3개는 붙여서 */
+  @media (max-width:360px){#p-macro .chips.few,#p-aux .chips.few{column-gap:12px}}
   #p-macro .chip2,#p-aux .chip2{column-gap:4px}
   #p-macro .chip2 i,#p-aux .chip2 i{width:7px;height:7px}
   #p-macro .chip2 .n,#p-aux .chip2 .n{font-size:11px}
@@ -245,6 +247,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   #p-macro .cnote.open,#p-aux .cnote.open{height:auto;white-space:normal}
   /* 숫자 칸은 항상 한 줄·같은 간격 (항목이 많아도 줄이 넘어가 차트가 작아지지 않게) */
   #p-macro .chips,#p-aux .chips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:10px;align-items:start}
+  #p-macro .chips.few,#p-aux .chips.few{grid-auto-columns:minmax(0,max-content);column-gap:28px}
   #p-macro .chip2 .n,#p-macro .chip2 .m,#p-aux .chip2 .n,#p-aux .chip2 .m,#p-macro .chip2 .v,#p-aux .chip2 .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 }
 @media (min-width:1280px){
@@ -705,7 +708,7 @@ const MG=[
   {id:'fxm',t:'원/달러 환율 · 월평균',u:'원',dec:1,s:[['환율(월평균)','월평균']]}
 ];
 function chipsHTML(items){
-  return '<div class="chips">'+items.map(it=>'<span class="chip2"><i style="background:'+it.color+'"></i><span class="n">'+it.name+'</span>'+
+  return '<div class="chips'+(items.length<4?' few':'')+'">'+items.map(it=>'<span class="chip2"><i style="background:'+it.color+'"></i><span class="n">'+it.name+'</span>'+
     '<span class="v">'+it.v+'</span><span class="m">'+it.m+(it.m2?'<span class="m2">'+it.m2+'</span>':'')+'</span></span>').join('')+'</div>';
 }
 function seriesChip(key,name,color,u,dec){
