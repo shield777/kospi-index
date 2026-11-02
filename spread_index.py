@@ -638,7 +638,7 @@ def build_payload(m, last_day, provisional, rec_sum, extra, daily=None, dindex=N
                       ensure_ascii=False, separators=(",", ":"))
 
 
-def daily_index(hist, n=40):
+def daily_index(hist, n=70):   # 70거래일 ≈ 석 달 → 월말에도 지난달 전체가 들어감
     """최근 n 거래일 각각의 '그날 기준' 조합1·조합2 (전일 대비 표시용). 마지막 값은 지금 지수와 같음"""
     try:
         days = hist["코스피"].dropna().index[-n:]
