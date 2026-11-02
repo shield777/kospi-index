@@ -183,6 +183,20 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   .rng-row .lbl{display:none}
   .rng-row .seg{flex:1} .rng-row .seg button{flex:1;padding:5px 2px}
 }
+/* 숫자 칸의 작은 글씨: '9월' + '전월 ▼0.2' */
+.chip2 .m2::before{content:' · '}
+@media (max-width:899px){
+  #p-macro .chips,#p-aux .chips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;align-items:start}
+  #p-macro .chip2,#p-aux .chip2{column-gap:4px}
+  #p-macro .chip2 i,#p-aux .chip2 i{width:7px;height:7px}
+  #p-macro .chip2 .n,#p-aux .chip2 .n{font-size:11px}
+  #p-macro .chip2 .v,#p-aux .chip2 .v{font-size:14.5px}
+  #p-macro .chip2 .m,#p-aux .chip2 .m{font-size:10px;line-height:1.45}
+  #p-macro .chip2 .m2,#p-aux .chip2 .m2{display:block}
+  #p-macro .chip2 .m2::before,#p-aux .chip2 .m2::before{content:none}
+  #p-macro .chip2 .n,#p-macro .chip2 .v,#p-macro .chip2 .m,#p-macro .chip2 .m2,
+  #p-aux .chip2 .n,#p-aux .chip2 .v,#p-aux .chip2 .m,#p-aux .chip2 .m2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+}
 /* 카드 설명 줄 */
 .cnote{font-size:12px;color:var(--muted);line-height:1.55;margin:-4px 0 10px}
 .cnote b{color:var(--ink2)}
@@ -678,12 +692,12 @@ const MG=[
 ];
 function chipsHTML(items){
   return '<div class="chips">'+items.map(it=>'<span class="chip2"><i style="background:'+it.color+'"></i><span class="n">'+it.name+'</span>'+
-    '<span class="v">'+it.v+'</span><span class="m">'+it.m+'</span></span>').join('')+'</div>';
+    '<span class="v">'+it.v+'</span><span class="m">'+it.m+(it.m2?'<span class="m2">'+it.m2+'</span>':'')+'</span></span>').join('')+'</div>';
 }
 function seriesChip(key,name,color,u,dec){
   const a=X.cols[key]; const i=lastI(a); if(i<0) return {name,color,v:'–',m:'자료 없음'};
   const j=prevI(a,i), mon=(+X.lab[i].slice(5,7))+'월';
-  return {name,color,v:nf(a[i],dec)+(u==='%'?'%':''),m:mon+(j>=0?' · 전월 '+arrow(a[i]-a[j],dec):'')};
+  return {name,color,v:nf(a[i],dec)+(u==='%'?'%':''),m:mon,m2:j>=0?'전월 '+arrow(a[i]-a[j],dec):''};
 }
 function renderMacro(){
   const el=document.getElementById('p-macro');
@@ -697,10 +711,10 @@ function renderMacro(){
       const L=X.cols['선행지수'],Cc=X.cols['동행지수'],i=Math.min(lastI(L),lastI(Cc));
       const df=i>=0?L[i]-Cc[i]:null, dp=i>0&&L[i-1]!=null&&Cc[i-1]!=null?(L[i-1]-Cc[i-1]):null, mon=i>=0?(+X.lab[i].slice(5,7))+'월':'';
       chips=chipsHTML([seriesChip('선행지수','선행','var(--c1)','',1),seriesChip('동행지수','동행','var(--c2)','',1),
-        {name:'선행 − 동행',color:'var(--axis)',v:df==null?'–':(df>0?'+':df<0?'−':'')+nf(Math.abs(df),1),m:mon+(dp!=null?' · 전월 '+arrow(df-dp,1):'')}]);
+        {name:'선행 − 동행',color:'var(--axis)',v:df==null?'–':(df>0?'+':df<0?'−':'')+nf(Math.abs(df),1),m:mon,m2:dp!=null?'전월 '+arrow(df-dp,1):''}]);
     }else if(g.kind==='flow'){
       const keys=[['기관','기관'],['외국인','외국인'],['개인','개인']];const i=lastI(X.cols['기관']);
-      chips=chipsHTML(keys.map(([k,n],q)=>{const v=X.cols[k]?X.cols[k][i]:null;return {name:n,color:'var(--c'+(q+1)+')',v:v==null?'–':(v>0?'+':v<0?'−':'')+nf(Math.abs(v)/1e6,1)+'조',m:(+X.lab[i].slice(5,7))+'월 누적'+(X.lab[i]===D.lab[last]&&CUR.provisional?'(진행 중)':'')};}));
+      chips=chipsHTML(keys.map(([k,n],q)=>{const v=X.cols[k]?X.cols[k][i]:null;return {name:n,color:'var(--c'+(q+1)+')',v:v==null?'–':(v>0?'+':v<0?'−':'')+nf(Math.abs(v)/1e6,1)+'조',m:(+X.lab[i].slice(5,7))+'월 누적',m2:X.lab[i]===D.lab[last]&&CUR.provisional?'진행 중':''};}));
     }else{
       chips=chipsHTML(g.s.map(([k,n],q)=>seriesChip(k,n,'var(--c'+(q+1)+')',g.u,g.dec)));
     }
@@ -772,7 +786,7 @@ function auxChip(key,name,color,g){
   let chg='';
   if(j>=0){const dv=a[i]-a[j];chg=g.ch==='bp'?arrow(dv*100,1)+'bp':g.ch==='pct'?arrow(dv/a[j]*100,2)+'%':arrow(dv,2);}
   const lvl=g.kind==='vk'?' · '+vkLevel(a[i]):'';
-  return {name,color,v:nf(a[i],g.dec)+unitTxt(g.u)+lvl,m:when+(chg?' · '+cmp+' '+chg:'')};
+  return {name,color,v:nf(a[i],g.dec)+unitTxt(g.u)+lvl,m:when,m2:chg?cmp+' '+chg:''};
 }
 function vkNote(){
   const a=X&&X.cols['VKOSPI']?clean(X.cols['VKOSPI']).filter(v=>v!=null).sort((p,q)=>p-q):[];
