@@ -224,6 +224,9 @@ def parse_dates(s):
     """엑셀 날짜·'2026-10-30'·20261030 등 여러 형태를 날짜로"""
     if pd.api.types.is_datetime64_any_dtype(s):
         return pd.to_datetime(s, errors="coerce")
+    fast = pd.to_datetime(s.astype(str).str.strip(), format="%Y/%m/%d", errors="coerce")
+    if fast.notna().sum() >= 0.9 * s.notna().sum() > 0:       # 수집 파일의 "YYYY/MM/DD" 는 한 번에 처리
+        return fast.where((fast.dt.year >= 1990) & (fast.dt.year <= 2100))
     out = pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
     for i, v in s.items():
         if v is None or (isinstance(v, float) and math.isnan(v)):
@@ -482,7 +485,7 @@ def zflow(s):
     return (raw / raw.rolling(60, min_periods=24).std()).clip(-3, 3)
 
 
-def compute(m):
+def compute(m, quiet=False):
     m = m.copy()
     m["sp12"] = m.sp.diff(12)
     m["z_sp"] = (m.sp12 / m.sp12.rolling(60, min_periods=24).std()).clip(-3, 3)
@@ -493,7 +496,8 @@ def compute(m):
     m = m[m.c1.first_valid_index():]
     # 끝쪽에 값이 비는 달(이번 달 수급이 아직 안 들어온 경우 등)은 잘라냄
     while len(m) and (pd.isna(m.c1.iloc[-1]) or pd.isna(m.c2.iloc[-1]) or pd.isna(m.k.iloc[-1])):
-        say(f"{m.index[-1]} 은 값이 비어 제외")
+        if not quiet:
+            say(f"{m.index[-1]} 은 값이 비어 제외")
         m = m.iloc[:-1]
     if m[["c1", "c2", "k"]].isna().any().any():
         bad = m.index[m[["c1", "c2", "k"]].isna().any(axis=1)]
@@ -617,7 +621,7 @@ def r1(x):
     return None if pd.isna(x) else round(float(x), 1)
 
 
-def build_payload(m, last_day, provisional, rec_sum, extra):
+def build_payload(m, last_day, provisional, rec_sum, extra, daily=None, dindex=None):
     """웹페이지가 읽는 숫자 묶음(data.json). 실행 시각처럼 매번 바뀌는 값은 넣지 않음 → 숫자가 같으면 올리지 않음"""
     D = {"lab": [str(x) for x in m.index],
          "k": [round(float(x), 2) for x in m.k],
@@ -630,7 +634,90 @@ def build_payload(m, last_day, provisional, rec_sum, extra):
            "z_sp": round(float(L.z_sp), 3), "z_ins": round(float(L.z_ins), 3), "z_fr": round(float(L.z_fr), 3)}
     if not D["lab"] or D["c1"][-1] is None:
         raise StopRun("지수 값이 비어 있어 올리지 않습니다")
-    return json.dumps({"D": D, "CUR": CUR, "REC": rec_sum, "X": extra}, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps({"D": D, "CUR": CUR, "REC": rec_sum, "X": extra, "DD": daily, "DI": dindex},
+                      ensure_ascii=False, separators=(",", ":"))
+
+
+def daily_index(hist, n=40):
+    """최근 n 거래일 각각의 '그날 기준' 조합1·조합2 (전일 대비 표시용). 마지막 값은 지금 지수와 같음"""
+    try:
+        days = hist["코스피"].dropna().index[-n:]
+        out = {"d": [], "c1": [], "c2": []}
+        for k, d in enumerate(days):
+            part = hist if k == len(days) - 1 else hist.loc[:d]
+            try:
+                mm = compute(monthly(part), quiet=True)
+            except Exception:
+                continue
+            out["d"].append(f"{d:%Y-%m-%d}")
+            out["c1"].append(r1(mm.c1.iloc[-1]))
+            out["c2"].append(r1(mm.c2.iloc[-1]))
+        return out if len(out["d"]) >= 2 else None
+    except Exception as e:
+        say(f"일별 지수 생략 ({type(e).__name__})")
+        return None
+
+
+_book_cache = {}
+
+
+def _read_book(path):
+    """수집 파일 전체 시트 읽기 (복사본으로, 한 번 읽은 파일은 다시 안 읽음)"""
+    if path not in _book_cache:
+        tmpdir = tempfile.mkdtemp(prefix="spread_x_")
+        try:
+            dst = os.path.join(tmpdir, "x.xlsx")
+            shutil.copy2(path, dst)
+            _book_cache[path] = pd.read_excel(dst, sheet_name=None)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+    return _book_cache[path]
+
+
+def _daily_frame(path):
+    frames = []
+    for sh in ("일단위", "추가_일단위"):
+        df = _read_book(path).get(sh)
+        if df is None or "날짜" not in df.columns:
+            continue
+        dt = parse_dates(df["날짜"])
+        df = df.drop(columns=[c for c in ("날짜", "년", "월", "일") if c in df.columns])
+        df.index = pd.DatetimeIndex(dt)
+        df = df[df.index.notna()].apply(to_num)
+        frames.append(df[~df.index.duplicated(keep="last")])
+    if not frames:
+        return None
+    out = pd.concat(frames, axis=1)
+    out.columns = [str(c) for c in out.columns]
+    return out.loc[:, ~out.columns.duplicated()].sort_index()
+
+
+def export_daily_table(data_dir, years=2):
+    """최근 2년 일별 표 (일단위·추가_일단위 시트 전체 열). 그날 수집 실패로 빠진 열은 이전 파일에서"""
+    try:
+        files = sorted(f for f in glob.glob(os.path.join(data_dir, COLLECT_GLOB)) if not os.path.basename(f).startswith("~$"))
+        base = None
+        for k, f in enumerate(reversed(files[-3:])):
+            df = _daily_frame(f)
+            if df is None:
+                continue
+            if base is None:
+                base = df
+                continue
+            for c in df.columns:
+                if c not in base.columns:
+                    base[c] = df[c].reindex(base.index)
+                    say(f"일별 '{c}' 은 최신 파일에 없어 이전 파일 값 사용")
+        if base is None or not len(base):
+            return None
+        base = base[base.index > base.index.max() - pd.DateOffset(years=years)]
+        base = base.loc[:, base.notna().any()]
+        rv = lambda x: None if pd.isna(x) else (round(float(x)) if abs(x) >= 1e5 else round(float(x), 4))
+        say(f"일별 표 {len(base)}일 × {base.shape[1]}개 지표 포함")
+        return {"d": [f"{d:%Y-%m-%d}" for d in base.index], "cols": {c: [rv(x) for x in base[c]] for c in base.columns}}
+    except Exception as e:
+        say(f"일별 표 생략 ({type(e).__name__}: {str(e)[:80]})")
+        return None
 
 
 FLOW_COLS = {"기관", "개인", "외국인"}
@@ -656,7 +743,7 @@ def export_monthly_table(data_dir):
             return None
         allp = sorted(set().union(*[set(v.index) for v in cols.values()]))
         idx = pd.period_range(allp[0], allp[-1], freq="M")
-        rv = lambda x: None if pd.isna(x) else (round(float(x)) if abs(x) >= 1000 else round(float(x), 4))
+        rv = lambda x: None if pd.isna(x) else (round(float(x)) if abs(x) >= 1e5 else round(float(x), 2) if abs(x) >= 100 else round(float(x), 4))
         out = {"lab": [str(p) for p in idx],
                "cols": {k: [rv(x) for x in v.reindex(idx)] for k, v in cols.items()},
                "note": "일단위 지표는 월말 값(기관·개인·외국인은 월 합계, 백만원), 월단위 지표는 그대로"}
@@ -668,13 +755,7 @@ def export_monthly_table(data_dir):
 
 
 def _monthly_cols(path):
-    tmpdir = tempfile.mkdtemp(prefix="spread_x_")
-    try:
-        dst = os.path.join(tmpdir, "x.xlsx")
-        shutil.copy2(path, dst)
-        xl = pd.read_excel(dst, sheet_name=None)
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+    xl = _read_book(path)
     cols = {}
     for sh in ("일단위", "추가_일단위"):
         df = xl.get(sh)
@@ -687,6 +768,8 @@ def _monthly_cols(path):
         g = df.groupby(df.index.to_period("M"))
         for c in df.columns:
             cols[str(c)] = g[c].sum(min_count=1) if str(c) in FLOW_COLS else g[c].last()
+        if "환율" in df.columns:
+            cols["환율(월평균)"] = g["환율"].mean()
     for sh in ("월단위", "추가_월단위"):
         df = xl.get(sh)
         if df is None or not {"년", "월"} <= set(df.columns):
@@ -830,7 +913,8 @@ def run(data_dir, repo_dir, today, check=False, interactive=False):
         say("※ 점검 모드라 아무 파일도 쓰지 않았습니다")
         return summary
     rec, rec_changed = update_records(data_dir, m, confirmed, today)
-    payload = build_payload(m, last_day, provisional, record_summary(rec), export_monthly_table(data_dir))
+    payload = build_payload(m, last_day, provisional, record_summary(rec), export_monthly_table(data_dir),
+                            export_daily_table(data_dir), daily_index(hist))
     # ── 여기까지 오류 없으면 쓰기 시작 ──
     save_base(data_dir, hist)
     if rec_changed:
