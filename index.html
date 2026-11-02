@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
+<meta name="build" content="20261102-222411">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -357,6 +358,19 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+/* 새 버전 확인: 브라우저가 예전 화면을 기억하고 있으면, 최신 화면을 받아 두고 한 번 새로고침 */
+(function(){
+  try{
+    const mine=document.querySelector('meta[name=build]').content;
+    fetch(location.pathname,{cache:'reload'}).then(r=>r.ok?r.text():'').then(t=>{
+      const m=t.match(/<meta name="build" content="([^"]+)"/);
+      if(m&&m[1]!==mine){
+        const k='rel_'+m[1];                       // 같은 버전으로는 한 번만 새로고침(무한 반복 방지)
+        if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,'1');location.reload();}
+      }
+    }).catch(()=>{});
+  }catch(e){}
+})();
 /* 숫자는 PC가 매일 올리는 data.json 에서 읽음. 화면(이 파일)은 GitHub에서 직접 고침 */
 async function loadData(){
   if(window.__PAYLOAD__) return window.__PAYLOAD__;          // PC에서 여는 미리보기용(숫자가 파일 안에 들어 있음)
