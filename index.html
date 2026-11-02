@@ -328,6 +328,11 @@ const monday=x=>{const t=new Date(x+'T00:00:00');t.setDate(t.getDate()-((t.getDa
 let wk=null;
 if(DI&&DI.d&&DI.d.length>=2){
   const L=DI.d.length-1, cw=monday(DI.d[L]), mons=DI.d.map(monday), pw=mons.filter(m=>m<cw).pop();
+  /* 전월 평균: 지난달 거래일마다의 예측지수 평균 (올라온 날짜가 모자라면 며칠 평균인지 표시) */
+  const pmk=DI.d.map(x=>x.slice(0,7)).filter(m=>m<DI.d[L].slice(0,7)).pop();
+  if(pmk){const vals=DI.c1.filter((x,i)=>DI.d[i].slice(0,7)===pmk&&x!=null);
+    if(vals.length){const avg=vals.reduce((p,q)=>p+q,0)/vals.length, tot=DD&&DD.d?DD.d.filter(x=>x.slice(0,7)===pmk).length:vals.length;
+      dh+=dRow((+pmk.slice(5))+'월 평균 '+avg.toFixed(1)+(vals.length<tot?' ('+vals.length+'일)':'')+' 대비',Math.round((v-avg)*10)/10);}}
   if(pw){const vals=DI.c1.filter((x,i)=>mons[i]===pw&&x!=null);
     if(vals.length){const avg=vals.reduce((p,q)=>p+q,0)/vals.length;wk={avg,dv:Math.round((v-avg)*10)/10};dh+=dRow('전주 평균 '+avg.toFixed(1)+' 대비',wk.dv);}}
   const a=DI.c1[L],b=DI.c1[L-1]; if(a!=null&&b!=null) dh+=dRow('전일 '+b.toFixed(1)+' 대비',Math.round((a-b)*10)/10);
