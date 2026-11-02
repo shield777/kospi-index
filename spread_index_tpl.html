@@ -180,6 +180,43 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   .rng-row .lbl{display:none}
   .rng-row .seg{flex:1} .rng-row .seg button{flex:1;padding:5px 2px}
 }
+/* 비교 3칸 (환율) */
+.cmp3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 12px;padding:10px 0;border-top:1px solid var(--grid);border-bottom:1px solid var(--grid)}
+.cmp3>div{display:grid;gap:1px;min-width:0}
+.cmp3 .l{font-size:11px;color:var(--muted)}
+.cmp3 b{font-size:15px;font-weight:700}
+.cmp3 .p{font-size:11px;color:var(--ink2);font-weight:600}
+.cmp3 .r{font-size:10.5px;color:var(--muted)}
+.mbox.short{height:200px} .mbox.mid{height:230px} .mbox.tall{height:280px}
+/* 예측모델 탭: 휴대폰에서는 묶음을 풀어 원래 순서대로 */
+.col{display:contents}
+#p-idx [aria-label="현재 판정"]{order:1} #p-idx [aria-label="경고등"]{order:2} #p-idx [aria-label="차트"]{order:3}
+#p-idx [aria-label="지수 구성"]{order:4} #p-idx [aria-label="판정 기준"]{order:5} #p-idx [aria-label="최근 12개월"]{order:6}
+#p-idx [aria-label="실제 기록"]{order:7} #p-idx .foot{order:8}
+/* PC · 아이패드 (가로 900px 이상): 여러 칸 */
+@media (min-width:900px){
+  body{padding-left:max(28px,env(safe-area-inset-left,0px));padding-right:max(28px,env(safe-area-inset-right,0px));padding-top:24px}
+  .wrap{max-width:1180px;gap:16px}
+  h1{font-size:22px}
+  .tabs{max-width:640px}
+  .panel{gap:16px}
+  #p-idx{grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start}
+  #p-idx .col{display:grid;gap:16px;align-content:start;min-width:0}
+  #p-idx .foot{grid-column:1/-1}
+  .big{font-size:76px}
+  .cbox{height:500px}
+  #p-day,#p-macro,#p-aux{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  #p-day>.dayhead,#p-day>.tiles,.panel>.rng-row,.panel>.foot,.panel>.note{grid-column:1/-1}
+  .tiles{gap:16px}
+  .tile{padding:18px}
+  .tile .val{font-size:32px}
+  .mbox{height:280px} .mbox.short{height:260px} .mbox.mid{height:290px} .mbox.tall{height:340px}
+  .rng-row{justify-content:flex-start;gap:14px}
+}
+@media (min-width:1280px){
+  .wrap{max-width:1320px}
+  #p-macro,#p-aux{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -198,6 +235,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   </nav>
 
   <div class="panel" id="p-idx" role="tabpanel">
+  <div class="col col-a">
   <section class="card" aria-label="현재 판정">
     <div class="eyebrow">예측지수 · 스프레드 70 + 기관 30</div>
     <div class="hero-row">
@@ -213,24 +251,6 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   <section class="warns" aria-label="경고등">
     <div class="warn" id="w1"><span class="t">경고 ① 상승 국면 약화</span><span class="s"></span><span class="d"></span></div>
     <div class="warn" id="w2"><span class="t">경고 ② 외국인 대량 매도</span><span class="s"></span><span class="d"></span></div>
-  </section>
-
-  <section class="card" aria-label="차트">
-    <div class="chart-head"><h2>코스피와 지수</h2><span class="hint">눌러서 값 보기</span></div>
-    <div class="rng">
-      <div class="seg" role="group" aria-label="기간" id="seg">
-        <button data-r="y1" aria-pressed="false">1년</button>
-        <button data-r="y3" aria-pressed="false">3년</button>
-        <button data-r="y5" aria-pressed="false">5년</button>
-        <button data-r="all" aria-pressed="false">전체</button>
-      </div>
-      <select class="ysel" id="ysel" aria-label="차트 시작 연도"></select>
-    </div>
-    <div class="cbox"><canvas id="ch" role="img" aria-label="위: 코스피 월말 종가, 아래: 예측지수">코스피와 지수 추이</canvas></div>
-    <div class="legend">
-      <span><i class="sw" style="background:var(--blue-wash);box-shadow:inset 0 0 0 1px var(--blue)"></i>상승 우세 (105 이상)</span>
-      <span><i class="sw" style="background:var(--red-wash);box-shadow:inset 0 0 0 1px var(--red)"></i>하락 경고 · 약세 구간</span>
-    </div>
   </section>
 
   <section class="card" aria-label="지수 구성">
@@ -252,6 +272,25 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
     </table></div>
     <p class="note" style="margin:12px 0 0">아무 신호 없을 때 3개월 뒤 상승확률은 약 57%. 하락 중 = 3개월 전보다 지수가 낮음. 진하게 표시된 줄이 지금 구간입니다.</p>
   </section>
+  </div>
+  <div class="col col-b">
+  <section class="card" aria-label="차트">
+    <div class="chart-head"><h2>코스피와 지수</h2><span class="hint">눌러서 값 보기</span></div>
+    <div class="rng">
+      <div class="seg" role="group" aria-label="기간" id="seg">
+        <button data-r="y1" aria-pressed="false">1년</button>
+        <button data-r="y3" aria-pressed="false">3년</button>
+        <button data-r="y5" aria-pressed="false">5년</button>
+        <button data-r="all" aria-pressed="false">전체</button>
+      </div>
+      <select class="ysel" id="ysel" aria-label="차트 시작 연도"></select>
+    </div>
+    <div class="cbox"><canvas id="ch" role="img" aria-label="위: 코스피 월말 종가, 아래: 예측지수">코스피와 지수 추이</canvas></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--blue-wash);box-shadow:inset 0 0 0 1px var(--blue)"></i>상승 우세 (105 이상)</span>
+      <span><i class="sw" style="background:var(--red-wash);box-shadow:inset 0 0 0 1px var(--red)"></i>하락 경고 · 약세 구간</span>
+    </div>
+  </section>
 
   <section class="card" aria-label="최근 12개월">
     <h2>최근 12개월</h2>
@@ -269,6 +308,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
     </table></div>
     <p class="note" style="margin:12px 0 0" id="recnote"></p>
   </section>
+  </div>
 
   <section class="note foot" aria-label="한계">
     <p>과거 통계 기준이며 확정 예측이 아닙니다. 조합과 기준선은 과거 결과를 보고 정했습니다.</p>
@@ -547,35 +587,44 @@ function renderDay(){
   const el=document.getElementById('p-day');
   if(!DD||!DD.cols||!DD.cols['코스피']){el.innerHTML='<section class="card"><p class="msg">일별 데이터가 아직 없습니다. PC 프로그램을 업데이트하면 다음 실행부터 표시됩니다.</p></section>';return;}
   const d=DD.d, C=DD.cols;
-  const tile=(name)=>{
-    const a=C[name]; if(!a) return '';
+  /* 비교 기준: 전일 / 전주 평균(지난주 월~금 종가) / 전월 평균(지난달 모든 거래일 종가) */
+  const ymd=t=>t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  const mons=d.map(x=>{const t=new Date(x+'T00:00:00');t.setDate(t.getDate()-((t.getDay()+6)%7));return ymd(t);});
+  const bases=a=>{
     const i=lastI(a), j=prevI(a,i), ym=d[i].slice(0,7);
     const avgOf=f=>{const xs=a.filter((x,q)=>x!=null&&q<i&&f(q));return xs.length?xs.reduce((p,q)=>p+q,0)/xs.length:null;};
-    /* 전주 평균: 지난주(월~금) 종가 평균 / 전월 평균: 지난달 모든 거래일 종가 평균 */
-    const ymd=t=>t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-    const mons=d.map(x=>{const t=new Date(x+'T00:00:00');t.setDate(t.getDate()-((t.getDay()+6)%7));return ymd(t);});
     const pw=mons.slice(0,i).filter(m=>m<mons[i]).pop(), pm=d.slice(0,i).map(x=>x.slice(0,7)).filter(m=>m<ym).pop();
-    const wAvg=pw?avgOf(q=>mons[q]===pw):null, mAvg=pm?avgOf(q=>d[q].slice(0,7)===pm):null;
-    const row=(lbl,base)=>{if(base==null)return '<div class="row"><span>'+lbl+'</span><b>–</b></div>';const dv=a[i]-base,pc=dv/base*100,cl=dv>0?'ku':dv<0?'kd':'';
-      return '<div class="row"><span>'+lbl+'</span><b class="'+cl+'">'+arrow(dv,2)+' <span class="pc">('+(pc>0?'+':pc<0?'−':'')+nf(Math.abs(pc),2)+'%)</span></b></div>';};
-    return '<div class="tile"><span class="nm">'+name+'</span><span class="val">'+nf(a[i],2)+'</span>'+
-      row('전일 대비',j>=0?a[j]:null)+row('전주 평균 대비',wAvg)+row('전월 평균 대비',mAvg)+
-      '<span class="ref">'+[wAvg!=null?'전주 평균 '+nf(wAvg,2):'',mAvg!=null?(+pm.slice(5,7))+'월 평균 '+nf(mAvg,2):''].filter(Boolean).join('<br>')+'</span></div>';
+    return {i,prev:j>=0?a[j]:null,wAvg:pw?avgOf(q=>mons[q]===pw):null,mAvg:pm?avgOf(q=>d[q].slice(0,7)===pm):null,pm};
+  };
+  const pct=(v,b)=>{const p=(v-b)/b*100;return (p>0?'+':p<0?'−':'')+nf(Math.abs(p),2)+'%';};
+  const tile=(name)=>{
+    const a=C[name]; if(!a) return '';
+    const B=bases(a), v=a[B.i];
+    const row=(lbl,base)=>{if(base==null)return '<div class="row"><span>'+lbl+'</span><b>–</b></div>';const dv=v-base,cl=dv>0?'ku':dv<0?'kd':'';
+      return '<div class="row"><span>'+lbl+'</span><b class="'+cl+'">'+arrow(dv,2)+' <span class="pc">('+pct(v,base)+')</span></b></div>';};
+    return '<div class="tile"><span class="nm">'+name+'</span><span class="val">'+nf(v,2)+'</span>'+
+      row('전일 대비',B.prev)+row('전주 평균 대비',B.wAvg)+row('전월 평균 대비',B.mAvg)+
+      '<span class="ref">'+[B.wAvg!=null?'전주 평균 '+nf(B.wAvg,2):'',B.mAvg!=null?(+B.pm.slice(5,7))+'월 평균 '+nf(B.mAvg,2):''].filter(Boolean).join('<br>')+'</span></div>';
+  };
+  const cmp3=(a,dec)=>{      // 환율 등: 전일 / 전주 평균 / 전월 평균 대비를 한 줄 3칸으로 (색 없이 방향만)
+    const B=bases(a), v=a[B.i];
+    const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b>'+arrow(v-base,dec)+'</b><span class="p">'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
+    return '<div class="cmp3">'+cell('전일 대비',B.prev,'전일')+cell('전주 평균 대비',B.wAvg,'전주 평균')+cell('전월 평균 대비',B.mAvg,B.pm?(+B.pm.slice(5,7))+'월 평균':'')+'</div>';
   };
 
   const iK=lastI(C['코스피']);
-  const card=(id,title,unit,key,dec,note)=>{
+  const card=(id,title,unit,key,dec,note,full)=>{
     const a=C[key]; if(!a) return '';
     const i=lastI(a), j=prevI(a,i);
     return '<section class="card"><div class="ch-head"><h2>'+title+'</h2><span class="unit">'+unit+'</span></div>'+
-      '<div class="kv"><span class="big2">'+nf(a[i],dec)+'</span><span class="sub2">전일 대비 '+(j>=0?arrow(a[i]-a[j],dec):'–')+' · '+d[i].slice(5).replace('-','.')+' 기준'+(note||'')+'</span></div>'+
-      '<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
+      '<div class="kv"><span class="big2">'+nf(a[i],dec)+'</span><span class="sub2">'+(full?'':'전일 대비 '+(j>=0?arrow(a[i]-a[j],dec):'–')+' · ')+d[i].slice(5).replace('-','.')+' 기준'+(note||'')+'</span></div>'+
+      (full?cmp3(a,dec):'')+'<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
   };
   el.innerHTML=
     '<div class="dayhead"><b>'+dLabel(d[iK])+'</b><span>장 마감 기준</span></div>'+
     '<div class="tiles">'+tile('코스피')+tile('코스닥')+'</div>'+
     '<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('dseg',[['3','3개월'],['6','6개월'],['12','1년'],['24','2년']],drange)+'</div>'+
-    card('c-fx','원/달러 환율','원','환율',1)+
+    card('c-fx','원/달러 환율','원','환율',1,'',true)+
     card('c-news','뉴스심리지수','기준 100','뉴스심리',1,' (한국은행 발표가 며칠 늦음)');
   el.querySelectorAll('#dseg button').forEach(b=>b.onclick=()=>{drange=b.dataset.v;setPref('drange',drange);el.querySelectorAll('#dseg button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawDay();});
   drawDay();
@@ -633,7 +682,7 @@ function renderMacro(){
     }
     const unit=g.kind==='flow'?'조원 · 코스피+코스닥 전체':g.kind==='cycle'?'100 = 장기 추세':g.u;
     h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+unit+'</span></div>'+chips+
-      '<div class="mbox" style="height:'+(g.kind==='cycle'?280:220)+'px"><canvas id="m-'+g.id+'"></canvas></div>'+
+      '<div class="mbox'+(g.kind==='cycle'?' tall':'')+'"><canvas id="m-'+g.id+'"></canvas></div>'+
       (g.note?'<p class="note" style="margin:10px 0 0">'+g.note+'</p>':'')+
       (g.kind==='flow'?'<p class="note" style="margin:10px 0 0">순매수 금액(산 금액 − 판 금액)의 월 합계입니다. 거래대금 총액이 아닙니다. 최근 12개월만 표시합니다.</p>':'')+'</section>';
   });
@@ -716,7 +765,7 @@ function renderAux(){
     const items=g.s.map(([k,n,u],q)=>auxChip(k,n,'var(--c'+(q+1)+')',u?Object.assign({},g,{u}):g));
     const tall=g.kind==='val'||g.kind==='credit';
     h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+chipsHTML(items)+
-      '<div class="mbox" style="height:'+(tall?280:g.kind==='vk'?230:200)+'px"><canvas id="a-'+g.id+'"></canvas></div>'+
+      '<div class="mbox'+(tall?' tall':g.kind==='vk'?' mid':' short')+'"><canvas id="a-'+g.id+'"></canvas></div>'+
       (g.kind==='vk'?'<p class="note" style="margin:10px 0 0">'+vkNote()+'</p>':g.note?'<p class="note" style="margin:10px 0 0">'+g.note+'</p>':'')+'</section>';
   });
   h+='<p class="note foot">6개월·1년·2년은 일별 값, 5년·전체는 월말 값으로 그립니다. 미국 지표(미국 10년, 달러인덱스, SOX)는 한국 거래일에 맞춰 직전 값을 씁니다.</p>';
@@ -797,6 +846,7 @@ function showTab(t,save){
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{showTab(b.dataset.t,true);const tb=document.querySelector('.tabs');if(tb.getBoundingClientRect().top<0||window.scrollY>tb.offsetTop)window.scrollTo({top:Math.max(0,tb.offsetTop-8)});});
 let curTab=(location.hash||'').slice(1); if(!PANELS[curTab]) curTab=getPref('tab','idx');
 showTab(curTab,false);
+addEventListener('hashchange',()=>{const t=location.hash.slice(1);if(PANELS[t])showTab(t,true);});
 const setTabsH=()=>{const tb=document.querySelector('.tabs');if(tb)document.documentElement.style.setProperty('--tabs-h',(tb.offsetHeight+4)+'px');};
 setTabsH(); addEventListener('resize',setTabsH);
 const redrawAll=()=>{const t=Object.keys(PANELS).find(k=>!document.getElementById(PANELS[k]).hidden)||'idx';if(t==='idx')setR(cur);if(t==='day'&&done.day)drawDay();if(t==='macro'&&done.macro)drawMacro();if(t==='aux'&&done.aux)drawAux();};
