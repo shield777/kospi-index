@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261102-223733">
+<meta name="build" content="20261103-060520">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -598,12 +598,17 @@ setR(saved&&/^(all|y\d+|f\d{4}-\d{2})$/.test(saved)?saved:'f2023-01');
 const SC=()=>({c:[css('--c1'),css('--c2'),css('--c3'),css('--c4')],grid:css('--grid'),axis:css('--axis'),m:css('--muted'),ink:css('--ink'),ink2:css('--ink2'),surf:css('--surface'),blue:css('--blue'),red:css('--red'),F:css('--f')});
 const charts={}; window.__charts=charts;  // (점검용)
 const NARROW=matchMedia('(max-width:899px)');     // 휴대폰: 세로축을 좁게 해 차트를 넓게
-const AX=()=>NARROW.matches?{w:38,r:14,f:10,p:6}:{w:50,r:18,f:11,p:8};   // 차트 그림 영역의 시작·끝을 모든 카드에서 맞추기 위한 값
+const AX=()=>NARROW.matches?{w:0,r:12,f:10,p:0,inside:true}:{w:50,r:18,f:11,p:8};   // 휴대폰: 세로축 숫자를 차트 안쪽에 → 가로 전체 사용   // 차트 그림 영역의 시작·끝을 모든 카드에서 맞추기 위한 값
 function alignCfg(cfg){
   const A=AX(), o=cfg.options=cfg.options||{}; o.layout=o.layout||{}; o.layout.padding=Object.assign({top:4},o.layout.padding||{},{right:A.r});
+  if(cfg.type==='bar'&&A.inside) o.layout.padding.left=6;
+  if(A.inside) o.layout.padding.top=14;            // 휴대폰: 맨 위 눈금 글자(가로줄 위에 놓임)가 잘리지 않게     // 선 차트는 Chart.js 가 왼쪽에 6px 를 두므로 막대 차트도 같게
   const sc=o.scales||{};
   Object.keys(sc).forEach(k=>{const t=sc[k].ticks=sc[k].ticks||{};t.font=Object.assign({},t.font||{},{size:A.f});
-    if(k[0]==='y'){t.padding=A.p;const prev=sc[k].afterFit;sc[k].afterFit=a=>{if(prev)prev(a);a.width=A.w;};}});
+    if(k==='x') t.align='inner';     // 맨 앞·맨 뒤 가로축 글자를 차트 안쪽으로 → 글자 때문에 여백이 늘지 않음
+    if(k[0]==='y'){t.padding=A.p;
+      if(A.inside){Object.assign(t,{mirror:true,padding:0,color:'rgba(0,0,0,0)'});}   // 글자는 아래 insideY 가 선 위에 다시 그림
+      const prev=sc[k].afterFit;sc[k].afterFit=a=>{if(prev)prev(a);a.width=A.w;};}});
   if(cfg.type==='line'&&cfg.data.datasets.some(d=>d.type==='bar')&&sc.x) sc.x.offset=false;   // 선+막대: 선이 양 끝까지
   /* 위·아래 두 칸 차트: 칸 바깥(맨 위·맨 아래)에는 여백을 두지 않고, 두 칸 사이에만 빈 띠를 넣음
      → 맨 위 가로줄이 다른 차트의 맨 위 가로줄과 같은 높이 */
@@ -613,6 +618,16 @@ function alignCfg(cfg){
     const out={}; Object.keys(sc).forEach(k=>{ if(k===st[1]) out.gap={axis:'y',type:'linear',stack:'v',stackWeight:.14,display:false,offset:false,min:0,max:1,position:'left'}; out[k]=sc[k]; });
     o.scales=out;
   }
+  if(A.inside){ cfg.plugins=(cfg.plugins||[]).concat([{id:'insideY',afterDatasetsDraw(c){
+    /* 휴대폰: 세로축 숫자를 차트 안쪽 왼쪽, 가로줄 바로 위에 — 선보다 위에, 바탕색 상자와 함께 */
+    const {ctx,chartArea:ar}=c, K=SC(), used=[]; ctx.save(); ctx.font='10px '+K.F; ctx.textBaseline='bottom'; ctx.textAlign='left';
+    Object.values(c.scales).filter(x=>x.axis==='y'&&x.options.display!==false).sort((p,q)=>p.top-q.top).forEach(sc2=>{   // 위 칸부터 → 경계에서는 위 칸 글자를 남김
+      (sc2.ticks||[]).forEach(tk=>{ const lb=tk.label; if(lb==null||lb==='') return; const txt=Array.isArray(lb)?lb.join(' '):String(lb);
+        const y=Math.round(sc2.getPixelForValue(tk.value))-2, w=ctx.measureText(txt).width;
+        if(used.some(u=>Math.abs(u-y)<15)) return; used.push(y);      // 위·아래 칸 경계에서 글자가 겹치면 하나만
+        ctx.fillStyle=K.surf; ctx.globalAlpha=.88; ctx.fillRect(ar.left,y-11,w+6,12); ctx.globalAlpha=1;
+        ctx.fillStyle=K.m; ctx.fillText(txt,ar.left+2,y); }); });
+    ctx.restore(); }}]); }
   return cfg;
 }
 function mk(key,el,cfg){if(typeof Chart==='undefined'||!el)return;cfg=alignCfg(cfg);if(charts[key])charts[key].destroy();const K=SC();Chart.defaults.font.family=K.F;Chart.defaults.color=K.m;Chart.defaults.font.size=11;charts[key]=new Chart(el,cfg);}
@@ -856,7 +871,8 @@ function twoPanel({lab,top,bot,tick,title,fmtTop,fmtBot,names,decTop=1,decBot=1}
     y2:{stack:'v',stackWeight:1,offset:true,position:'left',border:{display:false},grid:{color:K.grid,drawTicks:false},ticks:{padding:8,maxTicksLimit:3,callback:v=>nf(v,decBot)}},
     y:Object.assign({},sy.y,{stack:'v',stackWeight:1,offset:true,ticks:{padding:8,maxTicksLimit:4,callback:v=>nf(v,decTop)}})};
   cfg.plugins.push({id:'plab',beforeDatasetsDraw(c){const {ctx,chartArea:ar,scales}=c;ctx.save();ctx.font='600 11px '+K.F;ctx.fillStyle=K.ink2;ctx.textBaseline='top';
-    [[names[0],scales.y.top],[names[1],scales.y2.top]].forEach(([t,y])=>ctx.fillText(t,ar.left+6,y+4));ctx.restore();}});
+    const rt=NARROW.matches; if(rt) ctx.textAlign='right';
+    [[names[0],scales.y.top],[names[1],scales.y2.top]].forEach(([t,y])=>ctx.fillText(t,rt?ar.right-4:ar.left+6,y+4));ctx.restore();}});
   return cfg;
 }
 function drawAux(){
