@@ -19,12 +19,11 @@ import os, sys, re, json, glob, shutil, tempfile, subprocess, traceback, math, t
 from datetime import datetime, date, timedelta
 
 # ────────────────────────────── 설정 (경로가 바뀌면 여기만 고치기) ──────────────────────────────
-# 원본 데이터(data) 폴더: 아래 순서대로 찾아서 수집 파일이나 기준이력이 있는 첫 폴더를 씀
-#  (1) 이 프로그램 옆의 data 폴더  (2) 아래 목록
+# 원본 데이터 폴더: 아래 순서대로 찾아서 수집 파일이나 기준이력이 있는 첫 폴더를 씀
+#  (자동 실행 때는 경기지표_수집.py 가 OUT_DIR 을 직접 넘겨 주므로 이 목록은 손으로 실행할 때만 씀)
 DATA_DIR_CANDIDATES = [
-    r"C:\Users\Shiel\OneDrive\주식\경기데이터\data",
     r"C:\Users\Shiel\OneDrive\주식\경기데이터",
-    r"C:\Users\Shiel\OneDrive\주식\0.경기지표\data",
+    r"C:\Users\Shiel\OneDrive\주식\경기데이터\data",
 ]
 REPO_DIR = r"C:\Users\Shiel\kospi-index"
 REPO_NAME = "kospi-index"
@@ -644,40 +643,14 @@ def export_monthly_table(data_dir):
         files = sorted(f for f in glob.glob(os.path.join(data_dir, COLLECT_GLOB)) if not os.path.basename(f).startswith("~$"))
         if not files:
             return None
-        tmpdir = tempfile.mkdtemp(prefix="spread_x_")
-        try:
-            dst = os.path.join(tmpdir, "x.xlsx")
-            shutil.copy2(files[-1], dst)
-            xl = pd.read_excel(dst, sheet_name=None)
-        finally:
-            shutil.rmtree(tmpdir, ignore_errors=True)
         cols = {}
-        for sh in ("일단위", "추가_일단위"):
-            df = xl.get(sh)
-            if df is None or "날짜" not in df.columns:
-                continue
-            dt = parse_dates(df["날짜"])
-            df = df.drop(columns=[c for c in ("날짜", "년", "월", "일") if c in df.columns])
-            df.index = pd.DatetimeIndex(dt)
-            df = df[df.index.notna()].apply(to_num)
-            g = df.groupby(df.index.to_period("M"))
-            for c in df.columns:
-                cols[str(c)] = g[c].sum(min_count=1) if str(c) in FLOW_COLS else g[c].last()
-        for sh in ("월단위", "추가_월단위"):
-            df = xl.get(sh)
-            if df is None or not {"년", "월"} <= set(df.columns):
-                continue
-            ym = pd.to_datetime(dict(year=to_num(df["년"]), month=to_num(df["월"]), day=1), errors="coerce")
-            ok = ym.notna()
-            per = pd.DatetimeIndex(ym[ok]).to_period("M")
-            for c in df.columns:
-                if c in ("년", "월"):
-                    continue
-                v = to_num(df.loc[ok, c])
-                v.index = per
-                v = v[~v.index.duplicated(keep="last")]
-                name = str(c) if str(c) not in cols else f"{c}(월)"
-                cols[name] = v
+        for k, f in enumerate(reversed(files[-3:])):      # 최신 파일 먼저. 그날 수집 실패로 빠진 열은 이전 파일에서
+            part = _monthly_cols(f)
+            for name, v in part.items():
+                if name not in cols:
+                    cols[name] = v
+                    if k:
+                        say(f"추가 지표 '{name}' 은 최신 파일에 없어 이전 파일 값 사용")
         cols = {k: v for k, v in cols.items() if v.notna().any()}
         if not cols:
             return None
@@ -692,6 +665,44 @@ def export_monthly_table(data_dir):
     except Exception as e:
         say(f"추가 지표 표 생략 ({type(e).__name__}: {str(e)[:80]})")
         return None
+
+
+def _monthly_cols(path):
+    tmpdir = tempfile.mkdtemp(prefix="spread_x_")
+    try:
+        dst = os.path.join(tmpdir, "x.xlsx")
+        shutil.copy2(path, dst)
+        xl = pd.read_excel(dst, sheet_name=None)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    cols = {}
+    for sh in ("일단위", "추가_일단위"):
+        df = xl.get(sh)
+        if df is None or "날짜" not in df.columns:
+            continue
+        dt = parse_dates(df["날짜"])
+        df = df.drop(columns=[c for c in ("날짜", "년", "월", "일") if c in df.columns])
+        df.index = pd.DatetimeIndex(dt)
+        df = df[df.index.notna()].apply(to_num)
+        g = df.groupby(df.index.to_period("M"))
+        for c in df.columns:
+            cols[str(c)] = g[c].sum(min_count=1) if str(c) in FLOW_COLS else g[c].last()
+    for sh in ("월단위", "추가_월단위"):
+        df = xl.get(sh)
+        if df is None or not {"년", "월"} <= set(df.columns):
+            continue
+        ym = pd.to_datetime(dict(year=to_num(df["년"]), month=to_num(df["월"]), day=1), errors="coerce")
+        ok = ym.notna()
+        per = pd.DatetimeIndex(ym[ok]).to_period("M")
+        for c in df.columns:
+            if c in ("년", "월"):
+                continue
+            v = to_num(df.loc[ok, c])
+            v.index = per
+            v = v[~v.index.duplicated(keep="last")]
+            name = str(c) if str(c) not in cols else f"{c}(월)"
+            cols[name] = v
+    return {k: v for k, v in cols.items() if v.notna().any()}
 
 
 def build_local_html(payload, repo_dir):
@@ -833,7 +844,7 @@ def run(data_dir, repo_dir, today, check=False, interactive=False):
 
 
 def find_data_dir():
-    cands = [os.path.join(HERE, "data")] + DATA_DIR_CANDIDATES
+    cands = DATA_DIR_CANDIDATES + [os.path.join(HERE, "data"), r"C:\Users\Shiel\OneDrive\주식\0.경기지표\data"]
     for d in cands:
         if os.path.isdir(d) and (glob.glob(os.path.join(d, COLLECT_GLOB)) or os.path.exists(os.path.join(d, BASE_CSV))):
             return d
