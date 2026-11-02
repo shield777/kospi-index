@@ -180,6 +180,10 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   .rng-row .lbl{display:none}
   .rng-row .seg{flex:1} .rng-row .seg button{flex:1;padding:5px 2px}
 }
+/* 카드 설명 줄 */
+.cnote{font-size:12px;color:var(--muted);line-height:1.55;margin:-4px 0 10px}
+.cnote b{color:var(--ink2)}
+.cnote:empty{display:none}
 /* 비교 3칸 (환율) */
 .cmp3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 12px;padding:10px 0;border-top:1px solid var(--grid);border-bottom:1px solid var(--grid)}
 .cmp3>div{display:grid;gap:1px;min-width:0}
@@ -217,6 +221,10 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   /* 차트 크기는 모든 카드에서 같게: 높이 고정(늘리지 않음), 남는 공간은 카드 아래로 */
   #p-day>.card>.mbox,#p-macro>.card>.mbox,#p-aux>.card>.mbox,.mbox.short,.mbox.mid,.mbox.tall{flex:none;height:300px}
   .mbox>canvas{position:absolute;inset:0}       /* 차트 크기가 카드 높이를 밀어 올리지 않게 */
+  /* 설명 줄: 모든 카드가 같은 높이의 한 줄(비어 있어도 자리 유지), 길면 … 로 줄이고 누르면 펼침 */
+  #p-macro .cnote,#p-aux .cnote{display:block;height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  #p-macro .cnote:empty,#p-aux .cnote:empty{cursor:default}
+  #p-macro .cnote.open,#p-aux .cnote.open{height:auto;white-space:normal}
   /* 숫자 칸은 항상 한 줄·같은 간격 (항목이 많아도 줄이 넘어가 차트가 작아지지 않게) */
   #p-macro .chips,#p-aux .chips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:10px;align-items:start}
   #p-macro .chip2 .n,#p-macro .chip2 .m,#p-aux .chip2 .n,#p-aux .chip2 .m,#p-macro .chip2 .v,#p-aux .chip2 .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -649,6 +657,11 @@ function drawDay(){
   one('뉴스심리','c-news','뉴스심리',1,[100],K.c[1]);
 }
 
+/* 카드 설명 줄: 제목 바로 아래 작은 글씨. PC·아이패드에서는 한 줄 고정(누르면 펼침), 휴대폰은 전체 표시 */
+const cnote=t=>'<p class="cnote"'+(t?' tabindex="0" role="button" aria-expanded="false" title="눌러서 전체 보기"':'')+'>'+t+'</p>';
+document.addEventListener('click',e=>{const n=e.target.closest('.cnote');if(n&&n.textContent){const o=n.classList.toggle('open');n.setAttribute('aria-expanded',o);}});
+document.addEventListener('keydown',e=>{const n=e.target.closest&&e.target.closest('.cnote');if(n&&(e.key==='Enter'||e.key===' ')){e.preventDefault();n.click();}});
+
 /* ───────── 경기지표 탭 ───────── */
 let mrange=getPref('mrange','60');
 const MG=[
@@ -689,10 +702,9 @@ function renderMacro(){
       chips=chipsHTML(g.s.map(([k,n],q)=>seriesChip(k,n,'var(--c'+(q+1)+')',g.u,g.dec)));
     }
     const unit=g.kind==='flow'?'조원 · 코스피+코스닥 전체':g.kind==='cycle'?'100 = 장기 추세':g.u;
-    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+unit+'</span></div>'+chips+
-      '<div class="mbox'+(g.kind==='cycle'?' tall':'')+'"><canvas id="m-'+g.id+'"></canvas></div>'+
-      (g.note?'<p class="note" style="margin:10px 0 0">'+g.note+'</p>':'')+
-      (g.kind==='flow'?'<p class="note" style="margin:10px 0 0">순매수 금액(산 금액 − 판 금액)의 월 합계입니다. 거래대금 총액이 아닙니다. 최근 12개월만 표시합니다.</p>':'')+'</section>';
+    const note=g.kind==='flow'?'순매수 금액(산 금액 − 판 금액)의 월 합계입니다. 거래대금 총액이 아닙니다. 최근 12개월만 표시합니다.':(g.note||'');
+    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+unit+'</span></div>'+cnote(note)+chips+
+      '<div class="mbox'+(g.kind==='cycle'?' tall':'')+'"><canvas id="m-'+g.id+'"></canvas></div></section>';
   });
   el.innerHTML=h;
   el.querySelectorAll('#mseg button').forEach(b=>b.onclick=()=>{mrange=b.dataset.v;setPref('mrange',mrange);el.querySelectorAll('#mseg button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawMacro();});
@@ -772,9 +784,8 @@ function renderAux(){
   AUX.forEach(g=>{
     const items=g.s.map(([k,n,u],q)=>auxChip(k,n,'var(--c'+(q+1)+')',u?Object.assign({},g,{u}):g));
     const tall=g.kind==='val'||g.kind==='credit';
-    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+chipsHTML(items)+
-      '<div class="mbox'+(tall?' tall':g.kind==='vk'?' mid':' short')+'"><canvas id="a-'+g.id+'"></canvas></div>'+
-      (g.kind==='vk'?'<p class="note" style="margin:10px 0 0">'+vkNote()+'</p>':g.note?'<p class="note" style="margin:10px 0 0">'+g.note+'</p>':'')+'</section>';
+    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+cnote(g.kind==='vk'?vkNote():(g.note||''))+chipsHTML(items)+
+      '<div class="mbox'+(tall?' tall':g.kind==='vk'?' mid':' short')+'"><canvas id="a-'+g.id+'"></canvas></div></section>';
   });
   h+='<p class="note foot">6개월·1년·2년은 일별 값, 5년·전체는 월말 값으로 그립니다. 미국 지표(미국 10년, 달러인덱스, SOX)는 한국 거래일에 맞춰 직전 값을 씁니다.</p>';
   el.innerHTML=h;
