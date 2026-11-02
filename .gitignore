@@ -5,3 +5,5 @@
 !.gitignore
 !.nojekyll
 !data.json
+!manifest.webmanifest
+!*.png
