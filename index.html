@@ -214,11 +214,15 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   .rng-row{justify-content:flex-start;gap:14px}
   #p-day,#p-macro,#p-aux{align-items:stretch}
   #p-day>.card,#p-macro>.card,#p-aux>.card{display:flex;flex-direction:column}
-  #p-day>.card>.mbox,#p-macro>.card>.mbox,#p-aux>.card>.mbox{flex:1 1 auto}
+  /* 차트 크기는 모든 카드에서 같게: 높이 고정(늘리지 않음), 남는 공간은 카드 아래로 */
+  #p-day>.card>.mbox,#p-macro>.card>.mbox,#p-aux>.card>.mbox,.mbox.short,.mbox.mid,.mbox.tall{flex:none;height:300px}
   .mbox>canvas{position:absolute;inset:0}       /* 차트 크기가 카드 높이를 밀어 올리지 않게 */
+  /* 숫자 칸은 항상 한 줄·같은 간격 (항목이 많아도 줄이 넘어가 차트가 작아지지 않게) */
+  #p-macro .chips,#p-aux .chips{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:10px;align-items:start}
+  #p-macro .chip2 .n,#p-macro .chip2 .m,#p-aux .chip2 .n,#p-aux .chip2 .m,#p-macro .chip2 .v,#p-aux .chip2 .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 }
 @media (min-width:1280px){
-  .wrap{max-width:1320px}
+  .wrap{max-width:1480px}
   #p-macro,#p-aux{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
