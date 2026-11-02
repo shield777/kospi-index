@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="지수">
+<meta name="apple-mobile-web-app-title" content="경기지표">
 <meta name="format-detection" content="telephone=no">
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
-<title>스프레드·기관 지수</title>
+<title>경기지표</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
@@ -186,7 +186,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 <body>
 <div class="wrap">
   <header>
-    <h1>스프레드·기관 지수</h1>
+    <h1>경기지표</h1>
     <span class="asof"><span class="chip" id="chip"></span><span id="asof"></span></span>
   </header>
 
@@ -545,12 +545,19 @@ function renderDay(){
   const tile=(name)=>{
     const a=C[name]; if(!a) return '';
     const i=lastI(a), j=prevI(a,i), ym=d[i].slice(0,7);
-    let k=-1; for(let q=i-1;q>=0;q--) if(a[q]!=null&&d[q].slice(0,7)<ym){k=q;break;}
-    const row=(lbl,ref)=>{if(ref<0)return '<div class="row"><span>'+lbl+'</span><b>–</b></div>';const dv=a[i]-a[ref],pc=dv/a[ref]*100,cl=dv>0?'ku':dv<0?'kd':'';
+    const avgOf=f=>{const xs=a.filter((x,q)=>x!=null&&q<i&&f(q));return xs.length?xs.reduce((p,q)=>p+q,0)/xs.length:null;};
+    /* 전주 평균: 지난주(월~금) 종가 평균 / 전월 평균: 지난달 모든 거래일 종가 평균 */
+    const ymd=t=>t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    const mons=d.map(x=>{const t=new Date(x+'T00:00:00');t.setDate(t.getDate()-((t.getDay()+6)%7));return ymd(t);});
+    const pw=mons.slice(0,i).filter(m=>m<mons[i]).pop(), pm=d.slice(0,i).map(x=>x.slice(0,7)).filter(m=>m<ym).pop();
+    const wAvg=pw?avgOf(q=>mons[q]===pw):null, mAvg=pm?avgOf(q=>d[q].slice(0,7)===pm):null;
+    const row=(lbl,base)=>{if(base==null)return '<div class="row"><span>'+lbl+'</span><b>–</b></div>';const dv=a[i]-base,pc=dv/base*100,cl=dv>0?'ku':dv<0?'kd':'';
       return '<div class="row"><span>'+lbl+'</span><b class="'+cl+'">'+arrow(dv,2)+' <span class="pc">('+(pc>0?'+':pc<0?'−':'')+nf(Math.abs(pc),2)+'%)</span></b></div>';};
-    return '<div class="tile"><span class="nm">'+name+'</span><span class="val">'+nf(a[i],2)+'</span>'+row('전일 대비',j)+row('전월 대비',k)+
-      '<span class="ref">'+(k>=0?(+d[k].slice(5,7))+'월 말 '+nf(a[k],2):'')+'</span></div>';
+    return '<div class="tile"><span class="nm">'+name+'</span><span class="val">'+nf(a[i],2)+'</span>'+
+      row('전일 대비',j>=0?a[j]:null)+row('전주 평균 대비',wAvg)+row('전월 평균 대비',mAvg)+
+      '<span class="ref">'+[wAvg!=null?'전주 평균 '+nf(wAvg,2):'',mAvg!=null?(+pm.slice(5,7))+'월 평균 '+nf(mAvg,2):''].filter(Boolean).join('<br>')+'</span></div>';
   };
+
   const iK=lastI(C['코스피']);
   const card=(id,title,unit,key,dec,note)=>{
     const a=C[key]; if(!a) return '';
