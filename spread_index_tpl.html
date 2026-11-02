@@ -222,9 +222,19 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const D=__DATA__;
-const CUR=__CUR__;
-const REC=__REC__;
+/* 숫자는 PC가 매일 올리는 data.json 에서 읽음. 화면(이 파일)은 GitHub에서 직접 고침 */
+async function loadData(){
+  if(window.__PAYLOAD__) return window.__PAYLOAD__;          // PC에서 여는 미리보기용(숫자가 파일 안에 들어 있음)
+  const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+loadData().then(main).catch(e=>{
+  console.error(e);
+  document.querySelector('.wrap').insertAdjacentHTML('afterbegin','<div class="card" role="alert" style="color:var(--red);font-weight:600">데이터를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.</div>');
+});
+function main(P){
+const D=P.D, CUR=P.CUR, REC=P.REC, X=P.X||null;
 const n=D.lab.length, last=n-1;
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const slope=i=>D.s?D.s[i]:(i>=3&&D.c1[i]!=null&&D.c1[i-3]!=null?D.c1[i]-D.c1[i-3]:null);
@@ -395,6 +405,7 @@ let saved=null;try{saved=localStorage.getItem('range2')||(localStorage.getItem('
 setR(saved&&/^(all|y\d+|f\d{4}-\d{2})$/.test(saved)?saved:'f2023-01');
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>setR(cur));
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>setR(cur));
+}
 </script>
 </body>
 </html>

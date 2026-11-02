@@ -19,11 +19,16 @@ import os, sys, re, json, glob, shutil, tempfile, subprocess, traceback, math, t
 from datetime import datetime, date, timedelta
 
 # ────────────────────────────── 설정 (경로가 바뀌면 여기만 고치기) ──────────────────────────────
-DATA_DIR = r"C:\Users\Shiel\OneDrive\주식\0.경기지표\data"
+# 원본 데이터(data) 폴더: 아래 순서대로 찾아서 수집 파일이나 기준이력이 있는 첫 폴더를 씀
+#  (1) 이 프로그램 옆의 data 폴더  (2) 아래 목록
+DATA_DIR_CANDIDATES = [
+    r"C:\Users\Shiel\OneDrive\주식\경기데이터\data",
+    r"C:\Users\Shiel\OneDrive\주식\경기데이터",
+    r"C:\Users\Shiel\OneDrive\주식\0.경기지표\data",
+]
 REPO_DIR = r"C:\Users\Shiel\kospi-index"
 REPO_NAME = "kospi-index"
-# 화면 디자인(템플릿) 자동 받기: 매 실행마다 GitHub 의 tpl 가지에서 최신 디자인을 확인. 빈칸("")이면 끔
-TEMPLATE_URL = "https://raw.githubusercontent.com/shield777/kospi-index/tpl/spread_index_tpl.html"
+# 화면(index.html)은 GitHub 저장소에서 직접 고침. PC는 숫자(data.json)만 올림
 # ───────────────────────────────────────────────────────────────────────────────────────────────
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -613,12 +618,8 @@ def r1(x):
     return None if pd.isna(x) else round(float(x), 1)
 
 
-def build_html(m, last_day, provisional, rec_sum):
-    with open(TEMPLATE, encoding="utf-8") as f:
-        tpl = f.read()
-    for ph in ("__DATA__", "__CUR__", "__REC__"):
-        if tpl.count(ph) != 1:
-            raise StopRun(f"템플릿에 {ph} 자리가 정확히 한 번 있어야 합니다")
+def build_payload(m, last_day, provisional, rec_sum, extra):
+    """웹페이지가 읽는 숫자 묶음(data.json). 실행 시각처럼 매번 바뀌는 값은 넣지 않음 → 숫자가 같으면 올리지 않음"""
     D = {"lab": [str(x) for x in m.index],
          "k": [round(float(x), 2) for x in m.k],
          "c1": [r1(x) for x in m.c1],
@@ -628,8 +629,82 @@ def build_html(m, last_day, provisional, rec_sum):
     CUR = {"asof": last_day.strftime("%Y-%m-%d"), "provisional": bool(provisional),
            "sp": round(float(L.sp), 4), "sp12": round(float(L.sp12), 4),
            "z_sp": round(float(L.z_sp), 3), "z_ins": round(float(L.z_ins), 3), "z_fr": round(float(L.z_fr), 3)}
-    js = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":"))
-    return tpl.replace("__DATA__", js(D)).replace("__CUR__", js(CUR)).replace("__REC__", js(rec_sum))
+    if not D["lab"] or D["c1"][-1] is None:
+        raise StopRun("지수 값이 비어 있어 올리지 않습니다")
+    return json.dumps({"D": D, "CUR": CUR, "REC": rec_sum, "X": extra}, ensure_ascii=False, separators=(",", ":"))
+
+
+FLOW_COLS = {"기관", "개인", "외국인"}
+
+
+def export_monthly_table(data_dir):
+    """최신 수집 파일의 모든 지표를 월 단위 표로 (나중에 화면에 차트를 더할 때 PC를 안 고쳐도 되게).
+    일단위 시트 = 월말 값(기관·개인·외국인은 월 합계), 월단위 시트 = 그대로. 실패해도 지수에는 영향 없음"""
+    try:
+        files = sorted(f for f in glob.glob(os.path.join(data_dir, COLLECT_GLOB)) if not os.path.basename(f).startswith("~$"))
+        if not files:
+            return None
+        tmpdir = tempfile.mkdtemp(prefix="spread_x_")
+        try:
+            dst = os.path.join(tmpdir, "x.xlsx")
+            shutil.copy2(files[-1], dst)
+            xl = pd.read_excel(dst, sheet_name=None)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        cols = {}
+        for sh in ("일단위", "추가_일단위"):
+            df = xl.get(sh)
+            if df is None or "날짜" not in df.columns:
+                continue
+            dt = parse_dates(df["날짜"])
+            df = df.drop(columns=[c for c in ("날짜", "년", "월", "일") if c in df.columns])
+            df.index = pd.DatetimeIndex(dt)
+            df = df[df.index.notna()].apply(to_num)
+            g = df.groupby(df.index.to_period("M"))
+            for c in df.columns:
+                cols[str(c)] = g[c].sum(min_count=1) if str(c) in FLOW_COLS else g[c].last()
+        for sh in ("월단위", "추가_월단위"):
+            df = xl.get(sh)
+            if df is None or not {"년", "월"} <= set(df.columns):
+                continue
+            ym = pd.to_datetime(dict(year=to_num(df["년"]), month=to_num(df["월"]), day=1), errors="coerce")
+            ok = ym.notna()
+            per = pd.DatetimeIndex(ym[ok]).to_period("M")
+            for c in df.columns:
+                if c in ("년", "월"):
+                    continue
+                v = to_num(df.loc[ok, c])
+                v.index = per
+                v = v[~v.index.duplicated(keep="last")]
+                name = str(c) if str(c) not in cols else f"{c}(월)"
+                cols[name] = v
+        cols = {k: v for k, v in cols.items() if v.notna().any()}
+        if not cols:
+            return None
+        allp = sorted(set().union(*[set(v.index) for v in cols.values()]))
+        idx = pd.period_range(allp[0], allp[-1], freq="M")
+        rv = lambda x: None if pd.isna(x) else (round(float(x)) if abs(x) >= 1000 else round(float(x), 4))
+        out = {"lab": [str(p) for p in idx],
+               "cols": {k: [rv(x) for x in v.reindex(idx)] for k, v in cols.items()},
+               "note": "일단위 지표는 월말 값(기관·개인·외국인은 월 합계, 백만원), 월단위 지표는 그대로"}
+        say(f"추가 지표 {len(cols)}개 월별 표 포함 ({out['lab'][0]}~{out['lab'][-1]})")
+        return out
+    except Exception as e:
+        say(f"추가 지표 표 생략 ({type(e).__name__}: {str(e)[:80]})")
+        return None
+
+
+def build_local_html(payload, repo_dir):
+    """PC에서 바로 열어 보는 data\\지수_최신.html: GitHub 화면에 숫자를 넣어 한 파일로"""
+    js = payload.replace("</", "<\\/")
+    for src in (os.path.join(repo_dir, "index.html"), TEMPLATE):
+        if not os.path.exists(src):
+            continue
+        html = open(src, encoding="utf-8").read()
+        if "loadData" in html and "<script" in html:
+            i = html.index("<script")
+            return html[:i] + f"<script>window.__PAYLOAD__={js};</script>\n" + html[i:]
+    return None
 
 
 # ═══════════════════════════════ 5-3. GitHub Pages 올리기 ═══════════════════════════════
@@ -644,7 +719,7 @@ README = """# 스프레드·기관 지수
 
 과거 통계 기준이며 확정 예측이 아닙니다.
 """
-GITIGNORE = "*\n!index.html\n!robots.txt\n!README.md\n!.gitignore\n!.nojekyll\n"
+GITIGNORE = "*\n!index.html\n!data.json\n!robots.txt\n!README.md\n!.gitignore\n!.nojekyll\n"
 
 
 def git(repo, *args, timeout=60, interactive=False):
@@ -657,39 +732,42 @@ def git(repo, *args, timeout=60, interactive=False):
     return r.returncode, out
 
 
-def publish(repo, html, today, interactive=False):
-    """index.html 이 바뀌었을 때만 커밋. 아직 안 올라간 커밋이 있으면 push (실패하면 다음 실행 때 재시도)"""
+def publish(repo, payload, today, interactive=False):
+    """GitHub 최신 상태를 먼저 받아(화면은 GitHub에서 고치므로) data.json 만 바꿔 올림.
+    이 저장소 폴더는 GitHub 내용을 그대로 따라가는 '출력 전용' 폴더라 PC 쪽 변경은 덮어씀.
+    실패하면 다음 실행 때 처음부터 다시 함"""
     if not os.path.isdir(os.path.join(repo, ".git")):
         return "건너뜀(저장소 미설정 — 지수_처음설정.bat 을 한 번 실행하세요)"
-    p = os.path.join(repo, "index.html")
-    old = open(p, "rb").read() if os.path.exists(p) else b""
-    new = html.encode("utf-8")
-    msg = []
-    if old != new:
+    last = lambda o: (o.splitlines()[-1][:200] if o else "")
+    new = payload.encode("utf-8")
+    for attempt in (1, 2):
+        try:
+            code, out = git(repo, "fetch", "origin", "main", timeout=120, interactive=interactive)
+        except subprocess.TimeoutExpired:
+            return "GitHub 연결 시간 초과(다음 실행 때 재시도)"
+        if code != 0:
+            return "GitHub 연결 실패(다음 실행 때 재시도): " + last(out)
+        git(repo, "checkout", "-q", "-f", "-B", "main", "origin/main")
+        git(repo, "reset", "-q", "--hard", "origin/main")
+        p = os.path.join(repo, "data.json")
+        old = open(p, "rb").read() if os.path.exists(p) else b""
+        if old == new:
+            return "숫자 같음(올릴 것 없음)"
         atomic_write(p, new)
-        git(repo, "add", "index.html")
+        git(repo, "add", "-f", "data.json")
         code, out = git(repo, "commit", "-m", f"지수 갱신 {today:%Y-%m-%d}")
         if code != 0:
             return "커밋 실패: " + out[-300:]
-        msg.append("커밋함")
-    else:
-        msg.append("내용 같음(커밋 안 함)")
-    code, out = git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-    if code != 0:
-        args = ["push", "-u", "origin", "HEAD:main"]
-    else:
-        c2, ahead = git(repo, "rev-list", "--count", "@{u}..HEAD")
-        if c2 == 0 and ahead.strip() == "0":
-            return ", ".join(msg) + ", 올릴 것 없음"
-        args = ["push"]
-    try:
-        code, out = git(repo, *args, timeout=180, interactive=interactive)
-    except subprocess.TimeoutExpired:
-        return ", ".join(msg) + ", 올리기 시간 초과(다음 실행 때 재시도)"
-    if code != 0:
-        last = out.splitlines()[-1][:200] if out else ""
-        return ", ".join(msg) + ", 올리기 실패(다음 실행 때 재시도): " + last
-    return ", ".join(msg) + ", 올림"
+        try:
+            code, out = git(repo, "push", "origin", "HEAD:main", timeout=180, interactive=interactive)
+        except subprocess.TimeoutExpired:
+            return "올리기 시간 초과(다음 실행 때 재시도)"
+        if code == 0:
+            return "숫자 올림"
+        if attempt == 1 and any(k in out for k in ("rejected", "fetch first", "non-fast-forward")):
+            continue      # 그 사이 GitHub 화면이 바뀜 → 다시 받아서 한 번 더
+        return "올리기 실패(다음 실행 때 재시도): " + last(out)
+    return "올리기 실패(다음 실행 때 재시도)"
 
 
 def setup_repo(user, REPO_DIR):
@@ -720,33 +798,6 @@ def setup_repo(user, REPO_DIR):
     say(f"연결 주소: {url}")
 
 
-# ═══════════════════════════════ 화면 디자인 자동 받기 ═══════════════════════════════
-def update_template():
-    """GitHub 에 올려 둔 최신 디자인을 받아 템플릿을 바꿈. 실패하거나 이상한 파일이면 기존 것을 그대로 씀.
-    (HTML 디자인 파일만 받음. 계산 프로그램(.py)은 자동으로 바꾸지 않음)"""
-    if not TEMPLATE_URL:
-        return
-    try:
-        import urllib.request
-        req = urllib.request.Request(f"{TEMPLATE_URL}?t={int(time.time())}", headers={"Cache-Control": "no-cache"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = r.read(3_000_001)
-        txt = data.decode("utf-8")
-        ok = (len(data) < 3_000_000 and "</html>" in txt and "<script" in txt
-              and all(txt.count(ph) == 1 for ph in ("__DATA__", "__CUR__", "__REC__")))
-        if not ok:
-            say("화면 디자인: 받은 파일이 올바르지 않아 기존 디자인 사용")
-            return
-        old = open(TEMPLATE, "rb").read() if os.path.exists(TEMPLATE) else b""
-        if old != data:
-            if old:
-                shutil.copy2(TEMPLATE, TEMPLATE.replace(".html", "_이전.html"))
-            atomic_write(TEMPLATE, data)
-            say("화면 디자인: 새 디자인을 받아 적용")
-    except Exception as e:
-        say(f"화면 디자인: 확인 못 함, 기존 디자인 사용 ({type(e).__name__})")
-
-
 # ═══════════════════════════════ 실행 ═══════════════════════════════
 def run(data_dir, repo_dir, today, check=False, interactive=False):
     base, from_txt = load_base(data_dir)
@@ -767,17 +818,26 @@ def run(data_dir, repo_dir, today, check=False, interactive=False):
     if check:
         say("※ 점검 모드라 아무 파일도 쓰지 않았습니다")
         return summary
-    update_template()
     rec, rec_changed = update_records(data_dir, m, confirmed, today)
-    html = build_html(m, last_day, provisional, record_summary(rec))
+    payload = build_payload(m, last_day, provisional, record_summary(rec), export_monthly_table(data_dir))
     # ── 여기까지 오류 없으면 쓰기 시작 ──
     save_base(data_dir, hist)
     if rec_changed:
         atomic_write(os.path.join(data_dir, RECORD_CSV), rec.to_csv(index=False), encoding="utf-8-sig")
-    atomic_write(os.path.join(data_dir, LOCAL_HTML), html)
-    pub = publish(repo_dir, html, today, interactive=interactive)
+    pub = publish(repo_dir, payload, today, interactive=interactive)
     say("웹: " + pub)
+    html = build_local_html(payload, repo_dir)
+    if html:
+        atomic_write(os.path.join(data_dir, LOCAL_HTML), html)
     return summary
+
+
+def find_data_dir():
+    cands = [os.path.join(HERE, "data")] + DATA_DIR_CANDIDATES
+    for d in cands:
+        if os.path.isdir(d) and (glob.glob(os.path.join(d, COLLECT_GLOB)) or os.path.exists(os.path.join(d, BASE_CSV))):
+            return d
+    return cands[0]
 
 
 def keep_awake():
@@ -793,7 +853,7 @@ def keep_awake():
 def main():
     keep_awake()
     args = sys.argv[1:]
-    data_dir = os.environ.get("SPREAD_DATA_DIR", DATA_DIR)
+    data_dir = os.environ.get("SPREAD_DATA_DIR") or find_data_dir()
     repo_dir = os.environ.get("SPREAD_REPO_DIR", REPO_DIR)
     today = date.fromisoformat(os.environ["SPREAD_TODAY"]) if os.environ.get("SPREAD_TODAY") else date.today()
     if "--setup" in args:
@@ -812,6 +872,7 @@ def main():
     if not os.path.isdir(data_dir):
         print("data 폴더가 없습니다:", data_dir)
         return 1
+    print("data 폴더:", data_dir)
     lock = None
     try:
         if not check:
