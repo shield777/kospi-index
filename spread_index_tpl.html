@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261102-223358">
+<meta name="build" content="20261102-223733">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -605,6 +605,14 @@ function alignCfg(cfg){
   Object.keys(sc).forEach(k=>{const t=sc[k].ticks=sc[k].ticks||{};t.font=Object.assign({},t.font||{},{size:A.f});
     if(k[0]==='y'){t.padding=A.p;const prev=sc[k].afterFit;sc[k].afterFit=a=>{if(prev)prev(a);a.width=A.w;};}});
   if(cfg.type==='line'&&cfg.data.datasets.some(d=>d.type==='bar')&&sc.x) sc.x.offset=false;   // 선+막대: 선이 양 끝까지
+  /* 위·아래 두 칸 차트: 칸 바깥(맨 위·맨 아래)에는 여백을 두지 않고, 두 칸 사이에만 빈 띠를 넣음
+     → 맨 위 가로줄이 다른 차트의 맨 위 가로줄과 같은 높이 */
+  const st=Object.keys(sc).filter(k=>sc[k].stack==='v');
+  if(st.length===2){
+    st.forEach(k=>{sc[k].offset=false;});
+    const out={}; Object.keys(sc).forEach(k=>{ if(k===st[1]) out.gap={axis:'y',type:'linear',stack:'v',stackWeight:.14,display:false,offset:false,min:0,max:1,position:'left'}; out[k]=sc[k]; });
+    o.scales=out;
+  }
   return cfg;
 }
 function mk(key,el,cfg){if(typeof Chart==='undefined'||!el)return;cfg=alignCfg(cfg);if(charts[key])charts[key].destroy();const K=SC();Chart.defaults.font.family=K.F;Chart.defaults.color=K.m;Chart.defaults.font.size=11;charts[key]=new Chart(el,cfg);}
