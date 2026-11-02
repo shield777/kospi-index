@@ -629,7 +629,7 @@ function renderDay(){
     '<div class="tiles">'+tile('코스피')+tile('코스닥')+'</div>'+
     '<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('dseg',[['3','3개월'],['6','6개월'],['12','1년'],['24','2년']],drange)+'</div>'+
     card('c-fx','원/달러 환율','원','환율',1,'',true)+
-    card('c-news','뉴스심리지수','기준 100','뉴스심리',1,' (한국은행 발표가 며칠 늦음)');
+    card('c-news','뉴스심리지수','기준 100','뉴스심리',1,' (한국은행 발표가 며칠 늦음)',true);
   el.querySelectorAll('#dseg button').forEach(b=>b.onclick=()=>{drange=b.dataset.v;setPref('drange',drange);el.querySelectorAll('#dseg button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawDay();});
   drawDay();
 }
