@@ -212,6 +212,10 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   .tile .val{font-size:32px}
   .mbox{height:280px} .mbox.short{height:260px} .mbox.mid{height:290px} .mbox.tall{height:340px}
   .rng-row{justify-content:flex-start;gap:14px}
+  #p-day,#p-macro,#p-aux{align-items:stretch}
+  #p-day>.card,#p-macro>.card,#p-aux>.card{display:flex;flex-direction:column}
+  #p-day>.card>.mbox,#p-macro>.card>.mbox,#p-aux>.card>.mbox{flex:1 1 auto}
+  .mbox>canvas{position:absolute;inset:0}       /* 차트 크기가 카드 높이를 밀어 올리지 않게 */
 }
 @media (min-width:1280px){
   .wrap{max-width:1320px}
@@ -603,13 +607,13 @@ function renderDay(){
     const row=(lbl,base)=>{if(base==null)return '<div class="row"><span>'+lbl+'</span><b>–</b></div>';const dv=v-base,cl=dv>0?'ku':dv<0?'kd':'';
       return '<div class="row"><span>'+lbl+'</span><b class="'+cl+'">'+arrow(dv,2)+' <span class="pc">('+pct(v,base)+')</span></b></div>';};
     return '<div class="tile"><span class="nm">'+name+'</span><span class="val">'+nf(v,2)+'</span>'+
-      row('전일 대비',B.prev)+row('전주 평균 대비',B.wAvg)+row('전월 평균 대비',B.mAvg)+
-      '<span class="ref">'+[B.wAvg!=null?'전주 평균 '+nf(B.wAvg,2):'',B.mAvg!=null?(+B.pm.slice(5,7))+'월 평균 '+nf(B.mAvg,2):''].filter(Boolean).join('<br>')+'</span></div>';
+      row('전월 평균 대비',B.mAvg)+row('전주 평균 대비',B.wAvg)+row('전일 대비',B.prev)+
+      '<span class="ref">'+[B.mAvg!=null?(+B.pm.slice(5,7))+'월 평균 '+nf(B.mAvg,2):'',B.wAvg!=null?'전주 평균 '+nf(B.wAvg,2):'',B.prev!=null?'전일 '+nf(B.prev,2):''].filter(Boolean).join('<br>')+'</span></div>';
   };
   const cmp3=(a,dec)=>{      // 환율 등: 전일 / 전주 평균 / 전월 평균 대비를 한 줄 3칸으로 (색 없이 방향만)
     const B=bases(a), v=a[B.i];
     const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b>'+arrow(v-base,dec)+'</b><span class="p">'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
-    return '<div class="cmp3">'+cell('전일 대비',B.prev,'전일')+cell('전주 평균 대비',B.wAvg,'전주 평균')+cell('전월 평균 대비',B.mAvg,B.pm?(+B.pm.slice(5,7))+'월 평균':'')+'</div>';
+    return '<div class="cmp3">'+cell('전월 평균 대비',B.mAvg,B.pm?(+B.pm.slice(5,7))+'월 평균':'')+cell('전주 평균 대비',B.wAvg,'전주 평균')+cell('전일 대비',B.prev,'전일')+'</div>';
   };
 
   const iK=lastI(C['코스피']);
