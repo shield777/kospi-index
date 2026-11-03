@@ -821,9 +821,25 @@ def git(repo, *args, timeout=60, interactive=False):
     if not interactive:
         env["GIT_TERMINAL_PROMPT"] = "0"
         env["GCM_INTERACTIVE"] = "never"
-    r = subprocess.run(["git", "-C", repo] + list(args), capture_output=True, timeout=timeout, env=env)
+    # 작업 스케줄러가 창 없이(pythonw) 실행할 때 git 이 숨은 콘솔 창을 따로 띄우지 않게
+    flags = 0x08000000 if os.name == "nt" else 0          # CREATE_NO_WINDOW
+    r = subprocess.run(["git", "-C", repo] + list(args), capture_output=True, timeout=timeout, env=env,
+                       stdin=subprocess.DEVNULL, creationflags=flags)
     out = (r.stdout + r.stderr).decode("utf-8", "replace").strip()
     return r.returncode, out
+
+
+def git_diag(repo):
+    """올리기가 실패했을 때 원인을 찾기 위한 정보 (로그에 남김)"""
+    info = []
+    for args in (["--version"], ["config", "--show-origin", "--get-all", "credential.helper"],
+                 ["remote", "get-url", "origin"], ["status", "-sb"]):
+        try:
+            c, o = git(repo, *args, timeout=20)
+            info.append(f"git {' '.join(args)} → ({c}) {o.splitlines()[0] if o else '(출력 없음)'}")
+        except Exception as e:
+            info.append(f"git {' '.join(args)} → {type(e).__name__}")
+    return info
 
 
 def publish(repo, payload, today, interactive=False):
@@ -852,15 +868,25 @@ def publish(repo, payload, today, interactive=False):
         code, out = git(repo, "commit", "-m", f"지수 갱신 {today:%Y-%m-%d}")
         if code != 0:
             return "커밋 실패: " + out[-300:]
-        try:
-            code, out = git(repo, "push", "origin", "HEAD:main", timeout=180, interactive=interactive)
-        except subprocess.TimeoutExpired:
-            return "올리기 시간 초과(다음 실행 때 재시도)"
+        # 올리기: 깨어난 직후 연결이 불안정할 수 있어 20초 간격으로 최대 3번
+        code, out = 1, ""
+        for k in range(3):
+            try:
+                code, out = git(repo, "push", "origin", "HEAD:main", timeout=180, interactive=interactive)
+            except subprocess.TimeoutExpired:
+                code, out = -9, "시간 초과(180초)"
+            if code == 0 or any(x in out for x in ("rejected", "fetch first", "non-fast-forward")):
+                break
+            say(f"올리기 {k + 1}번째 실패 (코드 {code}): " + (" | ".join(out.splitlines()[-4:]) if out else "git 이 아무 말도 하지 않음"))
+            if k < 2:
+                time.sleep(20)
         if code == 0:
-            return "숫자 올림"
-        if attempt == 1 and any(k in out for k in ("rejected", "fetch first", "non-fast-forward")):
+            return "숫자 올림" + (" (재시도 후 성공)" if k else "")
+        if attempt == 1 and any(x in out for x in ("rejected", "fetch first", "non-fast-forward")):
             continue      # 그 사이 GitHub 화면이 바뀜 → 다시 받아서 한 번 더
-        return "올리기 실패(다음 실행 때 재시도): " + last(out)
+        for line in git_diag(repo):
+            say("  점검: " + line)
+        return f"올리기 실패(코드 {code}, 다음 실행 때 재시도): " + (last(out) or "git 이 아무 말도 하지 않음")
     return "올리기 실패(다음 실행 때 재시도)"
 
 
