@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261103-231514">
+<meta name="build" content="20261103-231837">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -211,6 +211,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 .cmp3 .l{font-size:11px;color:var(--muted)}
 .cmp3 b{font-size:15px;font-weight:700}
 .cmp3 .p{font-size:11px;color:var(--ink2);font-weight:600}
+.cmp3 .p.ku{color:var(--kr-up)} .cmp3 .p.kd{color:var(--kr-dn)}
 .cmp3 .r{font-size:10.5px;color:var(--muted)}
 .mbox.short{height:200px} .mbox.mid{height:230px} .mbox.tall{height:280px}
 /* 예측모델 탭: 휴대폰에서는 묶음을 풀어 원래 순서대로 */
@@ -690,26 +691,26 @@ function renderDay(){
       row('전월 평균 대비',B.mAvg)+row('전주 평균 대비',B.wAvg)+row('전일 대비',B.prev)+
       '<span class="ref">'+[B.mAvg!=null?(+B.pm.slice(5,7))+'월 평균 '+nf(B.mAvg,2):'',B.wAvg!=null?'전주 평균 '+nf(B.wAvg,2):'',B.prev!=null?'전일 '+nf(B.prev,2):''].filter(Boolean).join('<br>')+'</span></div>';
   };
-  const cmp3=(a,dec)=>{      // 환율 등: 전일 / 전주 평균 / 전월 평균 대비를 한 줄 3칸으로 (색 없이 방향만)
+  const cmp3=(a,dec,kr)=>{   // 전월 평균 / 전주 평균 / 전일 대비를 한 줄 3칸으로 (kr: 코스피·코스닥은 상승 빨강·하락 파랑, 그 외는 색 없이 방향만)
     const B=bases(a), v=a[B.i];
-    const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b>'+arrow(v-base,dec)+'</b><span class="p">'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
+    const cl=base=>!kr||base==null?'':(v>base?' class="ku"':v<base?' class="kd"':'');
+    const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b'+cl(base)+'>'+arrow(v-base,dec)+'</b><span class="p"'+cl(base)+'>'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
     return '<div class="cmp3">'+cell('전월 평균 대비',B.mAvg,B.pm?(+B.pm.slice(5,7))+'월 평균':'')+cell('전주 평균 대비',B.wAvg,'전주 평균')+cell('전일 대비',B.prev,'전일')+'</div>';
   };
 
   const iK=lastI(C['코스피']);
-  const card=(id,title,unit,key,dec,note,full)=>{
+  const card=(id,title,unit,key,dec,note,full,kr)=>{
     const a=C[key]; if(!a) return '';
     const i=lastI(a), j=prevI(a,i);
     return '<section class="card"><div class="ch-head"><h2>'+title+'</h2><span class="unit">'+unit+'</span></div>'+
       '<div class="kv"><span class="big2">'+nf(a[i],dec)+'</span><span class="sub2">'+(full?'':'전일 대비 '+(j>=0?arrow(a[i]-a[j],dec):'–')+' · ')+d[i].slice(5).replace('-','.')+' 기준'+(note||'')+'</span></div>'+
-      (full?cmp3(a,dec):'')+'<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
+      (full?cmp3(a,dec,kr):'')+'<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
   };
   el.innerHTML=
     '<div class="dayhead"><b>'+dLabel(d[iK])+'</b><span>장 마감 기준</span></div>'+
-    '<div class="tiles">'+tile('코스피')+tile('코스닥')+'</div>'+
     '<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('dseg',[['3','3개월'],['6','6개월'],['12','1년'],['24','2년']],drange)+'</div>'+
-    card('c-kospi','코스피','pt','코스피',2)+
-    card('c-kosdaq','코스닥','pt','코스닥',2)+
+    card('c-kospi','코스피','pt','코스피',2,'',true,true)+
+    card('c-kosdaq','코스닥','pt','코스닥',2,'',true,true)+
     card('c-fx','원/달러 환율','원','환율',1,'',true)+
     card('c-news','뉴스심리지수','기준 100','뉴스심리',1,' (한국은행 발표가 며칠 늦음)',true);
   el.querySelectorAll('#dseg button').forEach(b=>b.onclick=()=>{drange=b.dataset.v;setPref('drange',drange);el.querySelectorAll('#dseg button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawDay();});
