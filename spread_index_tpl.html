@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261103-231837">
+<meta name="build" content="20261103-231940">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -694,7 +694,7 @@ function renderDay(){
   const cmp3=(a,dec,kr)=>{   // 전월 평균 / 전주 평균 / 전일 대비를 한 줄 3칸으로 (kr: 코스피·코스닥은 상승 빨강·하락 파랑, 그 외는 색 없이 방향만)
     const B=bases(a), v=a[B.i];
     const cl=base=>!kr||base==null?'':(v>base?' class="ku"':v<base?' class="kd"':'');
-    const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b'+cl(base)+'>'+arrow(v-base,dec)+'</b><span class="p"'+cl(base)+'>'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
+    const cell=(lbl,base,ref)=>'<div><span class="l">'+lbl+'</span>'+(base==null?'<b>–</b>':'<b'+cl(base)+'>'+arrow(v-base,dec)+'</b><span class="p'+(!kr||v===base?'':v>base?' ku':' kd')+'">'+pct(v,base)+'</span><span class="r">'+ref+' '+nf(base,dec)+'</span>')+'</div>';
     return '<div class="cmp3">'+cell('전월 평균 대비',B.mAvg,B.pm?(+B.pm.slice(5,7))+'월 평균':'')+cell('전주 평균 대비',B.wAvg,'전주 평균')+cell('전일 대비',B.prev,'전일')+'</div>';
   };
 
