@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261103-232510">
+<meta name="build" content="20261103-232814">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -181,8 +181,6 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 .wrap>*,.panel>*{min-width:0}
 @media (max-width:380px){
   .tabs button{font-size:12.5px;padding:9px 2px}
-}
-@media (max-width:520px){      /* 휴대폰: '차트 기간' 글자를 빼고 기간 버튼이 줄 전체를 씀 */
   .rng-row .lbl{display:none}
   .rng-row .seg{flex:1} .rng-row .seg button{flex:1;padding:5px 2px}
 }
@@ -669,7 +667,7 @@ const getPref=(k,def)=>{try{return localStorage.getItem(k)||def}catch(e){return 
 const setPref=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 
 /* ───────── 일별현황 탭 ───────── */
-let drange=getPref('drange','6');
+let drange=getPref('drange','6'); if(!['3','6','12','24'].includes(drange)) drange='6';   // 예전에 고른 3년·5년이 남아 있으면 6개월로
 function renderDay(){
   const el=document.getElementById('p-day');
   if(!DD||!DD.cols||!DD.cols['코스피']){el.innerHTML='<section class="card"><p class="msg">일별 데이터가 아직 없습니다. PC 프로그램을 업데이트하면 다음 실행부터 표시됩니다.</p></section>';return;}
@@ -710,7 +708,7 @@ function renderDay(){
   };
   el.innerHTML=
     '<div class="dayhead"><b>'+dLabel(d[iK])+'</b><span>장 마감 기준</span></div>'+
-    '<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('dseg',[['3','3개월'],['6','6개월'],['12','1년'],['24','2년'],['36','3년'],['60','5년']],drange)+'</div>'+
+    '<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('dseg',[['3','3개월'],['6','6개월'],['12','1년'],['24','2년']],drange)+'</div>'+
     card('c-kospi','코스피','pt','코스피',2,'',true,true)+
     card('c-kosdaq','코스닥','pt','코스닥',2,'',true,true)+
     card('c-fx','원/달러 환율','원','환율',1,'',true)+
@@ -720,19 +718,12 @@ function renderDay(){
 }
 function drawDay(){
   if(!DD) return;
-  const K=SC();
-  let lab,get,tick,title;
-  if((+drange)>24&&X&&X.cols){      // 3년·5년: 일별 자료는 최근 2년뿐이라 월말 값으로
-    const st=Math.max(0,X.lab.length-(+drange));
-    lab=X.lab.slice(st); get=k=>X.cols[k]?X.cols[k].slice(st):null; tick=monthTick(lab); title=i=>ymLabel(lab[i])+' (월말)';
-  }else{
-    const d=DD.d, C=DD.cols, end=new Date(d[d.length-1]+'T00:00:00');
-    const from=new Date(end); from.setMonth(from.getMonth()-Math.min(24,+drange));
-    let st=d.findIndex(x=>new Date(x+'T00:00:00')>=from); if(st<0) st=0;
-    lab=d.slice(st); get=k=>C[k]?C[k].slice(st):null; tick=dayTick(lab); title=i=>dLabel(lab[i]);
-  }
-  const one=(key,id,name,dec,refs,color)=>{const a=get(key);if(!a)return;
-    mk(id,document.getElementById(id),lineCfg({lab,ds:[{name,data:a,color}],tick,fmt:v=>nf(v,dec),title,refs}));};
+  const d=DD.d, C=DD.cols, end=new Date(d[d.length-1]+'T00:00:00');
+  const from=new Date(end); from.setMonth(from.getMonth()-(+drange));
+  let st=d.findIndex(x=>new Date(x+'T00:00:00')>=from); if(st<0) st=0;
+  const lab=d.slice(st), K=SC();
+  const one=(key,id,name,dec,refs,color)=>{const a=C[key];if(!a)return;
+    mk(id,document.getElementById(id),lineCfg({lab,ds:[{name,data:a.slice(st),color}],tick:dayTick(lab),fmt:v=>nf(v,dec),title:i=>dLabel(lab[i]),refs}));};
   one('코스피','c-kospi','코스피',2,[],K.c[0]);
   one('코스닥','c-kosdaq','코스닥',2,[],K.c[2]);
   one('환율','c-fx','환율',1,[],K.c[0]);
