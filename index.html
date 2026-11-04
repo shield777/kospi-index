@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261105-075334">
+<meta name="build" content="20261105-075749">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -105,6 +105,7 @@ h2{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 12px;letter-spaci
 .ysel{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--wash);border:0;border-radius:10px;padding:7px 10px;max-width:100%;-webkit-appearance:none;appearance:none;
   padding-right:26px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat}
+.ypair{display:inline-flex;gap:6px}
 .cbox{position:relative;height:417px}   /* 코스피 칸과 예측지수 칸이 같은 높이 */
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink2);margin-top:10px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -322,7 +323,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
         <button data-r="y5" aria-pressed="false">5년</button>
         <button data-r="all" aria-pressed="false">전체</button>
       </div>
-      <select class="ysel" id="ysel" aria-label="차트 시작 연도"></select>
+      <span class="ypair"><select class="ysel" id="ysel" aria-label="차트 시작 연도"></select><select class="ysel" id="ysel2" aria-label="차트 끝 연도"></select></span>
     </div>
     <div class="cbox"><canvas id="ch" role="img" aria-label="위: 코스피 월말 종가, 아래: 예측지수">코스피와 지수 추이</canvas></div>
     <div class="legend">
@@ -507,9 +508,10 @@ if(REC&&REC.n>=6){
 
 /* 차트: 위 코스피, 아래 조합 1 — 같은 시간축, 서로 다른 세로축(겹치지 않음) */
 let chart;
-function draw(st){
+function draw(st,en){
   if(typeof Chart==='undefined') return;
-  const idx=[...Array(n-st).keys()].map(i=>i+st);
+  const e2=en==null?last:Math.min(last,en);
+  const idx=[...Array(Math.max(1,e2-st+1)).keys()].map(i=>i+st);
   const lab=idx.map(i=>D.lab[i]), K=idx.map(i=>D.k[i]), A=idx.map(i=>D.c1[i]);
   const flag=idx.map(i=>{const k=judge(i).k;return D.c1[i]>=105?1:(k==='alarm'||k==='weak'?-1:0)});
   const span=idx.length, full=span>84, mid=span>36;
@@ -578,21 +580,40 @@ const y0=+D.lab[0].slice(0,4), y1=+D.lab[last].slice(0,4);
 let opt='<option value="" disabled>시작 연도</option>';
 for(let y=y0;y<=y1;y++){const i=D.lab.findIndex(l=>+l.slice(0,4)===y);if(i>=0&&i<last)opt+='<option value="f'+D.lab[i]+'">'+y+'년~</option>';}
 ysel.innerHTML=opt;
-let cur='f2023-01';
+/* 끝 연도: '~현재' 또는 그해 12월까지 */
+const ysel2=document.getElementById('ysel2');
+let opt2='<option value="">~현재</option>';
+for(let y=y0;y<y1;y++) opt2+='<option value="'+y+'">~'+y+'년</option>';
+ysel2.innerHTML=opt2;
+let cur='f2023-01', curEnd='';
+function endOf(){
+  if(!curEnd) return last;
+  let i=-1; D.lab.forEach((l,k)=>{if(l.slice(0,4)===curEnd)i=k;});
+  return i>=0?i:last;
+}
 function startOf(r){
   if(r==='all')return 0;
   if(r[0]==='y')return Math.max(0,last-12*(+r.slice(1)));
   const i=D.lab.indexOf(r.slice(1));return i>=0?i:Math.max(0,last-36);
 }
-function setR(r,save){
+function setR(r,save,from){
   cur=r;
-  seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===r));
-  ysel.value=[...ysel.options].some(o=>o.value===r)?r:'';
-  draw(startOf(r));
-  if(save)try{localStorage.setItem('range2',r)}catch(e){}
+  if(from==='seg') curEnd='';                         // 1년·3년·5년·전체는 항상 지금까지
+  let st=startOf(r), en=endOf();
+  if(st>en){                                          // 시작이 끝보다 늦으면 자동으로 맞춤
+    if(from==='end'){ st=Math.max(0,en-35); cur='f'+D.lab[st]; }   // 끝을 바꿨으면 시작을 끝 3년 전으로
+    else { curEnd=''; en=last; }                      // 시작을 바꿨으면 끝을 '현재'로
+  }
+  seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',!curEnd&&b.dataset.r===cur));
+  ysel.value=[...ysel.options].some(o=>o.value===cur)?cur:'';
+  ysel2.value=curEnd;
+  draw(st,en);
+  if(save)try{localStorage.setItem('range2',cur);localStorage.setItem('range_end',curEnd)}catch(e){}
 }
-seg.querySelectorAll('button').forEach(b=>b.onclick=()=>setR(b.dataset.r,true));
-ysel.onchange=()=>{if(ysel.value)setR(ysel.value,true)};
+seg.querySelectorAll('button').forEach(b=>b.onclick=()=>setR(b.dataset.r,true,'seg'));
+ysel.onchange=()=>{if(ysel.value)setR(ysel.value,true,'start')};
+ysel2.onchange=()=>{curEnd=ysel2.value;setR(cur[0]==='y'?'f'+D.lab[startOf(cur)]:cur,true,'end')};
+try{const e=localStorage.getItem('range_end')||'';if(/^\d{4}$/.test(e)&&+e>=y0&&+e<y1)curEnd=e;}catch(e){}
 let saved=null;try{saved=localStorage.getItem('range2')||(localStorage.getItem('range')==='all'?'all':null)}catch(e){}
 setR(saved&&/^(all|y\d+|f\d{4}-\d{2})$/.test(saved)?saved:'f2023-01');
 /* ───────── 공통: 작은 차트 도구 ───────── */
