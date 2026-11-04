@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261103-232814">
+<meta name="build" content="20261105-071910">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -105,7 +105,7 @@ h2{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 12px;letter-spaci
 .ysel{font:inherit;font-size:13px;font-weight:600;color:var(--ink);background:var(--wash);border:0;border-radius:10px;padding:7px 10px;max-width:100%;-webkit-appearance:none;appearance:none;
   padding-right:26px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px;background-repeat:no-repeat}
-.cbox{position:relative;height:380px}
+.cbox{position:relative;height:417px}   /* 코스피 칸과 예측지수 칸이 같은 높이 */
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink2);margin-top:10px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;border-radius:3px}
@@ -230,7 +230,7 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
   #p-idx .col{display:grid;gap:16px;align-content:start;min-width:0}
   #p-idx .foot{grid-column:1/-1}
   .big{font-size:76px}
-  .cbox{height:500px}
+  .cbox{height:550px}
   #p-day,#p-macro,#p-aux{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
   #p-day>.dayhead,#p-day>.tiles,.panel>.rng-row,.panel>.foot,.panel>.note{grid-column:1/-1}
   .tiles{gap:16px}
@@ -567,7 +567,7 @@ function draw(st){
         x:{grid:{display:false},border:{color:C.axis},ticks:{autoSkip:false,maxRotation:0,callback:xt,padding:6}},
         y2:{stack:'v',stackWeight:1,offset:true,position:'left',min:80,max:120,border:{display:false},grid:{color:C.grid,drawTicks:false},
           afterBuildTicks:a=>{a.ticks=[80,95,100,105,120].map(v=>({value:v}))},ticks:{padding:8,color:C.m}},
-        y:{stack:'v',stackWeight:1.25,offset:true,position:'left',type:full?'logarithmic':'linear',border:{display:false},grid:{color:C.grid,drawTicks:false},
+        y:{stack:'v',stackWeight:1,offset:true,position:'left',type:full?'logarithmic':'linear',border:{display:false},grid:{color:C.grid,drawTicks:false},
           ticks:{padding:8,maxTicksLimit:5,callback:v=>full?([1000,2000,3000,4000,6000,8000,10000,20000,30000].includes(v)?v.toLocaleString():''):v.toLocaleString()}}}},
     plugins:[deco]});
 }
