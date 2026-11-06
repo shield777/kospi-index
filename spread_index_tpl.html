@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261105-075749">
+<meta name="build" content="20261106-213943">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -849,9 +849,12 @@ const AUX=[
   {id:'vk',t:'VKOSPI · 코스피200 변동성지수',u:'',dec:2,ch:'pt',kind:'vk',s:[['VKOSPI','VKOSPI']]},
   {id:'val',t:'코스피 PER · PBR',u:'배',dec:2,ch:'pt',kind:'val',s:[['코스피 PER','PER'],['코스피 PBR','PBR']],note:'후행(지난 실적 기준) 값입니다'},
   {id:'dxy',t:'달러인덱스 (DXY)',u:'',dec:2,ch:'pct',s:[['달러인덱스(DXY)','달러인덱스']]},
+  {id:'oil',t:'국제유가 · WTI · 브렌트',u:'달러/배럴',dec:2,ch:'pct',s:[['WTI','WTI'],['브렌트유','브렌트']],
+    note:'한국이 들여오는 두바이유도 대체로 같은 방향으로 움직입니다. 오르면 물가·수입물가 부담이 커집니다',
+    missing:'국제유가는 아직 PC 수집 항목에 없습니다. 경기수집자동화에서 WTI·브렌트유를 수집하기 시작하면 다음 날부터 자동으로 여기에 표시됩니다.'},
   {id:'sox',t:'필라델피아 반도체지수 (SOX)',u:'',dec:1,ch:'pct',s:[['필라델피아반도체(SOX)','SOX']]}
 ];
-const US_KEYS=new Set(['미국10년국채','달러인덱스(DXY)','필라델피아반도체(SOX)']);
+const US_KEYS=new Set(['미국10년국채','달러인덱스(DXY)','필라델피아반도체(SOX)','WTI','브렌트유']);
 const clean=a=>a?a.map(v=>v===0?null:v):a;      // 수집 때 발표 전이라 0 으로 들어온 값은 빈칸으로
 const unitTxt=u=>u==='%'?'%':u==='%p'?'%p':u==='배'?'배':'';
 function auxChip(key,name,color,g){
@@ -877,12 +880,17 @@ function renderAux(){
   if(!X&&!DD){el.innerHTML='<section class="card"><p class="msg">보조지표 데이터가 아직 없습니다.</p></section>';return;}
   let h='<div class="rng-row"><span class="lbl">차트 기간</span>'+segHTML('aseg',[['6','6개월'],['12','1년'],['24','2년'],['60','5년'],['all','전체']],arange)+'</div>';
   AUX.forEach(g=>{
+    const has=g.s.some(([k])=>(DD&&DD.cols&&DD.cols[k])||(X&&X.cols&&X.cols[k]));
+    if(!has){   // 아직 수집하지 않는 지표: 안내만 (데이터가 들어오면 자동으로 차트가 나타남)
+      h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+g.u+'</span></div><p class="msg">'+(g.missing||'자료 없음')+'</p></section>';
+      return;
+    }
     const items=g.s.map(([k,n,u],q)=>auxChip(k,n,'var(--c'+(q+1)+')',u?Object.assign({},g,{u}):g));
     const tall=g.kind==='val'||g.kind==='credit';
     h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+cnote(g.kind==='vk'?vkNote():(g.note||''))+chipsHTML(items)+
       '<div class="mbox'+(tall?' tall':g.kind==='vk'?' mid':' short')+'"><canvas id="a-'+g.id+'"></canvas></div></section>';
   });
-  h+='<p class="note foot">6개월·1년·2년은 일별 값, 5년·전체는 월말 값으로 그립니다. 미국 지표(미국 10년, 달러인덱스, SOX)는 한국 거래일에 맞춰 직전 값을 씁니다.</p>';
+  h+='<p class="note foot">6개월·1년·2년은 일별 값, 5년·전체는 월말 값으로 그립니다. 미국 지표(미국 10년, 달러인덱스, SOX, 국제유가)는 한국 거래일에 맞춰 직전 값을 씁니다.</p>';
   el.innerHTML=h;
   el.querySelectorAll('#aseg button').forEach(b=>b.onclick=()=>{arange=b.dataset.v;setPref('arange',arange);el.querySelectorAll('#aseg button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawAux();});
   drawAux();
