@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261106-213943">
+<meta name="build" content="20261108-160155">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -866,8 +866,16 @@ function auxChip(key,name,color,g){
   const when=src.day?src.lab[i].slice(5).replace('-','.'):(+src.lab[i].slice(5,7))+'월', cmp=src.day?(us?'직전':'전일'):'전월';
   let chg='';
   if(j>=0){const dv=a[i]-a[j];chg=g.ch==='bp'?arrow(dv*100,1)+'bp':g.ch==='pct'?arrow(dv/a[j]*100,2)+'%':arrow(dv,2);}
-  const lvl=g.kind==='vk'?' · '+vkLevel(a[i]):'';
+  const lvl=g.kind==='vk'?' · '+vkLevel(a[i]):key==='신용스프레드(AA-−국고3년)'?' · '+crLevel(a[i]):'';
   return {name,color,v:nf(a[i],g.dec)+unitTxt(g.u)+lvl,m:when,m2:chg?cmp+' '+chg:''};
+}
+const CR_LV=[[1.0,'위험'],[0.8,'경계'],[0.6,'주의'],[-9,'안정']];
+const crLevel=v=>v==null?'':CR_LV.find(([t])=>v>=t)[1];
+function crNote(){
+  const k='신용스프레드(AA-−국고3년)', a=X&&X.cols[k]?clean(X.cols[k]).filter(v=>v!=null).sort((p,q)=>p-q):[];
+  if(a.length<24) return '기준선: 0.6 주의 · 0.8 경계 · 1.0 위험';
+  const med=a[Math.floor((a.length-1)/2)], pct=t=>Math.round(a.filter(v=>v>=t).length/a.length*100), y0=X.lab.find((l,i)=>X.cols[k][i]!=null);
+  return '기준선: <b>0.6 주의 · 0.8 경계 · 1.0 위험</b>(%p). '+y0.slice(0,4)+'년 이후 월말 중간값은 '+nf(med,2)+'%p이고, 0.8 이상은 '+pct(0.8)+'%, 1.0 이상은 '+pct(1.0)+'%의 달(2020년 코로나, 2022년 레고랜드 사태 등)에만 나왔습니다. 벌어질수록 기업 자금 사정이 나쁘다는 뜻입니다. 단, 과거엔 크게 벌어진 시기가 오히려 주가 바닥 근처인 경우가 많았습니다. 위 칸이 신용스프레드, 아래 칸이 두 금리입니다.';
 }
 function vkNote(){
   const a=X&&X.cols['VKOSPI']?clean(X.cols['VKOSPI']).filter(v=>v!=null).sort((p,q)=>p-q):[];
@@ -887,7 +895,7 @@ function renderAux(){
     }
     const items=g.s.map(([k,n,u],q)=>auxChip(k,n,'var(--c'+(q+1)+')',u?Object.assign({},g,{u}):g));
     const tall=g.kind==='val'||g.kind==='credit';
-    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+cnote(g.kind==='vk'?vkNote():(g.note||''))+chipsHTML(items)+
+    h+='<section class="card"><div class="ch-head"><h2>'+g.t+'</h2><span class="unit">'+(g.kind==='credit'?'%p · %':g.u)+'</span></div>'+cnote(g.kind==='vk'?vkNote():g.kind==='credit'?crNote():(g.note||''))+chipsHTML(items)+
       '<div class="mbox'+(tall?' tall':g.kind==='vk'?' mid':' short')+'"><canvas id="a-'+g.id+'"></canvas></div></section>';
   });
   h+='<p class="note foot">6개월·1년·2년은 일별 값, 5년·전체는 월말 값으로 그립니다. 미국 지표(미국 10년, 달러인덱스, SOX, 국제유가)는 한국 거래일에 맞춰 직전 값을 씁니다.</p>';
@@ -930,10 +938,24 @@ function drawAux(){
         top:[{name:'PER',data:get('코스피 PER'),color:K.c[0]}],bot:[{name:'PBR',data:get('코스피 PBR'),color:K.c[1]}],
         fmtTop:v=>nf(v,2)+'배',fmtBot:v=>nf(v,2)+'배'}));
     }else if(g.kind==='credit'){
-      mk('a-credit',el,twoPanel({lab,tick,title,names:['신용스프레드 (%p)','회사채 AA- · 국고 3년 (%)'],decTop:1,decBot:1,
+      const cr=twoPanel({lab,tick,title,names:['신용스프레드 (%p)','회사채 AA- · 국고 3년 (%)'],decTop:1,decBot:1,
         top:[{name:'신용스프레드',data:get('신용스프레드(AA-−국고3년)'),color:K.c[0]}],
         bot:[{name:'회사채 AA- 3년',data:get('회사채AA-3년'),color:K.c[1]},{name:'국고 3년',data:get('국채3년'),color:K.c[2]}],
-        fmtTop:v=>nf(v,3)+'%p',fmtBot:v=>nf(v,3)+'%'}));
+        fmtTop:v=>nf(v,3)+'%p · '+crLevel(v),fmtBot:v=>nf(v,3)+'%'});
+      const yt=cr.options.scales.y, nar=NARROW.matches;
+      { const dv=cr.data.datasets[0].data.filter(v=>v!=null), dmin=Math.min(...dv), dmax=Math.max(...dv);   // 선이 눌리지 않게 범위를 데이터에 맞추되 1.0(위험) 선은 늘 보이게
+        yt.min=Math.max(0,Math.floor((dmin-0.05)*10)/10); yt.max=dmax<1.0?1.1:Math.ceil((dmax+0.05)*10)/10; }
+      yt.afterBuildTicks=a=>{   /* 기준선 이름이 우선. 범위가 넓으면 '위험'만, 맨 위·아래 숫자는 기준선과 가까우면 생략 */
+        const th=a.max-a.min>1.2?[1.0]:[0.6,0.8,1.0], gap=(a.max-a.min)*0.15;
+        const t=th.filter(v=>v>=a.min&&v<=a.max).concat([a.min,a.max].filter(v=>th.every(w=>Math.abs(w-v)>gap)));
+        a.ticks=t.sort((p,q)=>p-q).map(v=>({value:v}));};
+      yt.ticks=Object.assign({},yt.ticks,{autoSkip:false,callback:v=>Math.abs(v-0.6)<1e-6?(nar?'주의':'주의 0.6'):Math.abs(v-0.8)<1e-6?(nar?'경계':'경계 0.8'):Math.abs(v-1)<1e-6?(nar?'위험':'위험 1.0'):nf(v,1)});
+      cr.plugins.push({id:'crband',beforeDatasetsDraw(c){const {ctx,chartArea:ar,scales:{y}}=c;ctx.save();
+        const band=(a2,b2,col)=>{const t=Math.max(y.top,y.getPixelForValue(Math.min(b2,y.max))),bt=Math.min(y.bottom,y.getPixelForValue(Math.max(a2,y.min)));if(bt<=t)return;ctx.fillStyle=col;ctx.fillRect(ar.left,t,ar.right-ar.left,bt-t);};
+        band(0.8,1.0,css('--red-wash'));band(1.0,y.max,css('--red-wash'));band(1.0,y.max,css('--red-wash'));
+        [0.6,0.8,1.0].forEach(v=>{if(v<y.min||v>y.max)return;const p2=Math.round(y.getPixelForValue(v))+.5;ctx.strokeStyle=css('--axis');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ar.left,p2);ctx.lineTo(ar.right,p2);ctx.stroke();});
+        ctx.restore();}});
+      mk('a-credit',el,cr);
     }else if(g.kind==='vk'){
       const data=get('VKOSPI'), mx=Math.max(45,...data.filter(v=>v!=null))*1.05, stp=mx>60?20:10;
       const cfg=lineCfg({lab,ds:[{name:'VKOSPI',data,color:K.c[0]}],tick,fmt:v=>nf(v,2)+' · '+vkLevel(v),title,ymin:0,ymax:Math.ceil(mx/stp)*stp});
