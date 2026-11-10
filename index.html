@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#f4f4f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>경기지표</title>
-<meta name="build" content="20261108-160155">
+<meta name="build" content="20261110-093016">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -110,6 +110,7 @@ h2{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 12px;letter-spaci
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink2);margin-top:10px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw{width:12px;height:12px;border-radius:3px}
+.sw.ln{height:0;width:18px;border-radius:0}
 /* 구성 */
 .comp{display:grid;gap:16px}
 .crow{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:baseline}
@@ -329,13 +330,15 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
     <div class="legend">
       <span><i class="sw" style="background:var(--blue-wash);box-shadow:inset 0 0 0 1px var(--blue)"></i>상승 우세 (105 이상)</span>
       <span><i class="sw" style="background:var(--red-wash);box-shadow:inset 0 0 0 1px var(--red)"></i>하락 경고 · 약세 구간</span>
+      <span id="lg-b" hidden><i class="sw ln" style="border-top:2px dashed var(--c3)"></i>보강지수 (시험 중)</span>
     </div>
+    <p class="note" id="bnote" hidden style="margin:8px 0 0">보강지수 = 예측지수 60% + 코스피 PBR(낮을수록 +) · 기준금리 1년 변화(내릴수록 +) · 신용스프레드 1년 변화(벌어질수록 +) · 개인 3개월 순매수(팔수록 +) 각 10%. 2012~2026 검증에서 3개월 뒤 코스피와의 상관이 0.40→0.51로 올랐고, 특히 큰 하락 전에 100 아래로 먼저 내려간 경우가 많았습니다(55%→91%). 판정·경고는 여전히 예측지수 기준이며, 보강지수는 1년쯤 지켜본 뒤 교체를 판단합니다.</p>
   </section>
 
   <section class="card" aria-label="최근 12개월">
     <h2>최근 12개월</h2>
     <div class="tbl"><table>
-      <thead><tr><th>월</th><th>코스피</th><th>예측지수</th><th>조합 2</th><th>판정</th></tr></thead>
+      <thead><tr><th>월</th><th>코스피</th><th>예측지수</th><th class="bcol" hidden>보강</th><th>조합 2</th><th>판정</th></tr></thead>
       <tbody id="hist"></tbody>
     </table></div>
   </section>
@@ -495,8 +498,10 @@ document.getElementById('comp').innerHTML=comps.map(c=>{
 document.querySelectorAll('#rule tr').forEach(r=>r.classList.toggle('cur',r.dataset.k===J.k));
 
 /* 최근 12개월 */
-const rows=[];for(let i=last;i>last-12&&i>=0;i--){rows.push('<tr><td>'+D.lab[i].replace('-','.')+'</td><td>'+Math.round(D.k[i]).toLocaleString()+'</td><td><b>'+D.c1[i].toFixed(1)+'</b></td><td>'+D.c2[i].toFixed(1)+'</td><td class="j">'+lab8(judge(i))+'</td></tr>');}
+const hasC3=!!(D.c3&&D.c3.some(x=>x!=null));
+const rows=[];for(let i=last;i>last-12&&i>=0;i--){rows.push('<tr><td>'+D.lab[i].replace('-','.')+'</td><td>'+Math.round(D.k[i]).toLocaleString()+'</td><td><b>'+D.c1[i].toFixed(1)+'</b></td>'+(hasC3?'<td style="color:var(--c3)">'+(D.c3[i]==null?'–':D.c3[i].toFixed(1))+'</td>':'')+'<td>'+D.c2[i].toFixed(1)+'</td><td class="j">'+lab8(judge(i))+'</td></tr>');}
 document.getElementById('hist').innerHTML=rows.join('');
+if(hasC3){document.querySelector('.bcol').hidden=false;document.getElementById('lg-b').hidden=false;document.getElementById('bnote').hidden=false;}
 
 /* 실제 기록 적중률 */
 if(REC&&REC.n>=6){
@@ -513,11 +518,12 @@ function draw(st,en){
   const e2=en==null?last:Math.min(last,en);
   const idx=[...Array(Math.max(1,e2-st+1)).keys()].map(i=>i+st);
   const lab=idx.map(i=>D.lab[i]), K=idx.map(i=>D.k[i]), A=idx.map(i=>D.c1[i]);
+  const B=idx.map(i=>D.c3?D.c3[i]:null), hasB=B.some(x=>x!=null);
   const flag=idx.map(i=>{const k=judge(i).k;return D.c1[i]>=105?1:(k==='alarm'||k==='weak'?-1:0)});
   const span=idx.length, full=span>84, mid=span>36;
   const F=css('--f');
   const C={k:css('--kospi'),a:css('--blue'),grid:css('--grid'),axis:css('--axis'),m:css('--muted'),ink:css('--ink'),ink2:css('--ink2'),
-           bw:css('--blue-wash'),rw:css('--red-wash'),surf:css('--surface')};
+           bw:css('--blue-wash'),rw:css('--red-wash'),surf:css('--surface'),b:css('--c3')};
   const deco={id:'deco',
     beforeDatasetsDraw(c){
       const {ctx,chartArea:ar,scales:{x,y,y2}}=c;
@@ -543,10 +549,15 @@ function draw(st,en){
       const act=c.tooltip&&c.tooltip.getActiveElements?c.tooltip.getActiveElements():[];
       if(act.length){const xx=Math.round(act[0].element.x)+.5;ctx.strokeStyle=C.m;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(xx,ar.top);ctx.lineTo(xx,ar.bottom);ctx.stroke();}
       // 끝점과 마지막 값
-      [[0,C.k,Math.round(K[K.length-1]).toLocaleString()],[1,C.a,A[A.length-1].toFixed(1)]].forEach(([di,col,txt])=>{
-        const pts=c.getDatasetMeta(di).data, pt=pts[pts.length-1]; if(!pt) return;
-        ctx.beginPath();ctx.arc(pt.x,pt.y,4,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=C.surf;ctx.stroke();
-        ctx.font='700 11px '+F;ctx.fillStyle=C.ink;ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillText(txt,pt.x+8,pt.y);
+      const lastB=hasB?[...B].reverse().find(x=>x!=null):null;
+      const ends=[[0,C.k,Math.round(K[K.length-1]).toLocaleString()],[1,C.a,A[A.length-1].toFixed(1)]];
+      if(lastB!=null) ends.push([2,C.b,lastB.toFixed(1)]);
+      const pA=c.getDatasetMeta(1).data.at(-1);
+      ends.forEach(([di,col,txt])=>{
+        const pts=c.getDatasetMeta(di).data, pt=pts[pts.length-1]; if(!pt||pt.skip) return;
+        ctx.beginPath();ctx.arc(pt.x,pt.y,di===2?3:4,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=C.surf;ctx.stroke();
+        let ty=pt.y; if(di===2&&pA&&Math.abs(pA.y-pt.y)<13) ty=pA.y+(pt.y>=pA.y?13:-13);   // 예측지수 글자와 겹치면 위·아래로 비킴
+        ctx.font='700 11px '+F;ctx.fillStyle=di===2?C.b:C.ink;ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillText(txt,pt.x+8,ty);
       });
       ctx.restore();
     }};
@@ -556,14 +567,15 @@ function draw(st,en){
   chart=new Chart(document.getElementById('ch'),{type:'line',
     data:{labels:lab,datasets:[
       {label:'코스피',data:K,borderColor:C.k,borderWidth:2,pointRadius:0,pointHoverRadius:4,pointHoverBorderWidth:2,pointHoverBorderColor:C.surf,pointHoverBackgroundColor:C.k,tension:.2,yAxisID:'y',borderJoinStyle:'round',borderCapStyle:'round'},
-      {label:'예측지수',data:A,borderColor:C.a,borderWidth:2,pointRadius:0,pointHoverRadius:4,pointHoverBorderWidth:2,pointHoverBorderColor:C.surf,pointHoverBackgroundColor:C.a,tension:.2,yAxisID:'y2',borderJoinStyle:'round',borderCapStyle:'round'}]},
+      {label:'예측지수',data:A,borderColor:C.a,borderWidth:2,pointRadius:0,pointHoverRadius:4,pointHoverBorderWidth:2,pointHoverBorderColor:C.surf,pointHoverBackgroundColor:C.a,tension:.2,yAxisID:'y2',borderJoinStyle:'round',borderCapStyle:'round'},
+      ...(hasB?[{label:'보강지수',data:B,borderColor:C.b,borderWidth:1.5,borderDash:[5,4],pointRadius:0,pointHoverRadius:4,pointHoverBorderWidth:2,pointHoverBorderColor:C.surf,pointHoverBackgroundColor:C.b,tension:.2,yAxisID:'y2',spanGaps:true,borderJoinStyle:'round',borderCapStyle:'round'}]:[])]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{right:44,top:2}},
       interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},
         tooltip:{backgroundColor:C.ink,titleColor:C.surf,bodyColor:C.surf,padding:10,cornerRadius:10,displayColors:true,boxWidth:8,boxHeight:8,boxPadding:4,usePointStyle:true,
           titleFont:{weight:'700',size:12,family:F},bodyFont:{size:12,family:F},
           callbacks:{title:c=>c[0].label.replace('-','.'),
-            label:c=>c.datasetIndex===0?' 코스피 '+Math.round(c.raw).toLocaleString():' 예측지수 '+c.raw.toFixed(1)+' · '+judge(idx[c.dataIndex]).t.split(' · ')[0],
+            label:c=>c.datasetIndex===0?' 코스피 '+Math.round(c.raw).toLocaleString():c.datasetIndex===2?' 보강지수 '+c.raw.toFixed(1):' 예측지수 '+c.raw.toFixed(1)+' · '+judge(idx[c.dataIndex]).t.split(' · ')[0],
             labelPointStyle:()=>({pointStyle:'circle',rotation:0})}}},
       scales:{
         x:{grid:{display:false},border:{color:C.axis},ticks:{autoSkip:false,maxRotation:0,callback:xt,padding:6}},
