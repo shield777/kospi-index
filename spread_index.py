@@ -621,13 +621,38 @@ def r1(x):
     return None if pd.isna(x) else round(float(x), 1)
 
 
-def build_payload(m, last_day, provisional, rec_sum, extra, daily=None, dindex=None):
+def augmented(m, extra):
+    """보강지수 = 예측지수(조합1) 60% + 코스피 PBR(역) · 한국 기준금리 12개월 변화(역) · 신용스프레드 12개월 변화 · 개인 3개월 순매수(역) 각 10%.
+    2026-11 시뮬레이션(2012-12~2026-08, 165개월): 3개월 뒤 코스피와의 순위상관 0.40→0.51, 3개월 뒤 -10% 이상 하락 전 100 미만 비율 55%→91%.
+    필요한 열이 수집 파일에 없으면 None(화면에서 보강지수 선만 빠짐). 지수 판정에는 쓰지 않음"""
+    try:
+        if not extra:
+            return None
+        X = pd.DataFrame(extra["cols"], index=pd.PeriodIndex(extra["lab"], freq="M")).apply(to_num)
+        cs = X["신용스프레드(AA-−국고3년)"] if "신용스프레드(AA-−국고3년)" in X else (X["회사채AA-3년"] - X["국채3년"])
+        pbr = X["코스피 PBR"].replace(0, np.nan)
+        zc = lambda x: (x / x.rolling(60, min_periods=24).std()).clip(-3, 3)                                   # 변화형: z_sp 방식
+        zl = lambda x: ((x - x.rolling(60, min_periods=24).mean()) / x.rolling(60, min_periods=24).std()).clip(-3, 3)  # 수준형: 5년 평균 대비
+        f = (-zl(pbr) - zc(X["한국 기준금리"].diff(12)) + zc(cs.diff(12)) - zflow(X["개인"])).reindex(m.index)
+        c3 = 100 + 10 * (0.42 * m.z_sp + 0.18 * m.z_ins + 0.1 * f)
+        if c3.notna().sum() < 12:
+            say("보강지수: 값이 너무 적어 생략")
+            return None
+        return c3
+    except Exception as e:
+        say(f"보강지수 생략 ({type(e).__name__}: {str(e)[:80]})")
+        return None
+
+
+def build_payload(m, last_day, provisional, rec_sum, extra, daily=None, dindex=None, c3=None):
     """웹페이지가 읽는 숫자 묶음(data.json). 실행 시각처럼 매번 바뀌는 값은 넣지 않음 → 숫자가 같으면 올리지 않음"""
     D = {"lab": [str(x) for x in m.index],
          "k": [round(float(x), 2) for x in m.k],
          "c1": [r1(x) for x in m.c1],
          "c2": [r1(x) for x in m.c2],
          "s": [r1(x) for x in m.slope]}
+    if c3 is not None:
+        D["c3"] = [r1(x) for x in c3.reindex(m.index)]
     L = m.iloc[-1]
     CUR = {"asof": last_day.strftime("%Y-%m-%d"), "provisional": bool(provisional),
            "sp": round(float(L.sp), 4), "sp12": round(float(L.sp12), 4),
@@ -939,8 +964,12 @@ def run(data_dir, repo_dir, today, check=False, interactive=False):
         say("※ 점검 모드라 아무 파일도 쓰지 않았습니다")
         return summary
     rec, rec_changed = update_records(data_dir, m, confirmed, today)
-    payload = build_payload(m, last_day, provisional, record_summary(rec), export_monthly_table(data_dir),
-                            export_daily_table(data_dir), daily_index(hist))
+    extra = export_monthly_table(data_dir)
+    c3 = augmented(m, extra)
+    if c3 is not None and not pd.isna(c3.iloc[-1]):
+        say(f"보강지수 {c3.iloc[-1]:.1f} (예측지수 {m.c1r.iloc[i]:.1f})")
+    payload = build_payload(m, last_day, provisional, record_summary(rec), extra,
+                            export_daily_table(data_dir), daily_index(hist), c3)
     # ── 여기까지 오류 없으면 쓰기 시작 ──
     save_base(data_dir, hist)
     if rec_changed:
