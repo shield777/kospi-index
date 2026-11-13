@@ -25,7 +25,7 @@
   --red:#d03b3b; --red-wash:rgba(208,59,59,.10); --red-soft:#fbe6e4;
   --warn:#fab219; --warn-soft:#fdf1d6; --warn-ink:#7a5200;
   --kospi:#6f6e69;
-  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --kr-up:#d03b3b; --kr-dn:#2a78d6;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --kr-up:#d03b3b; --kr-dn:#2a78d6; --ma5:#d6409f; --ma20:#e89a14; --ma60:#7b61d1; --ma120:#8a8984;
   --f:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   color-scheme:light;
 }
@@ -35,14 +35,14 @@
   --blue:#3987e5; --blue-wash:rgba(57,135,229,.16); --blue-soft:#1b2c43;
   --red:#e66767; --red-wash:rgba(230,103,103,.14); --red-soft:#3d2120;
   --warn:#fab219; --warn-soft:#3a2f14; --warn-ink:#fab219;
-  --kospi:#a3a29b; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --kr-up:#e66767; --kr-dn:#3987e5; color-scheme:dark}}
+  --kospi:#a3a29b; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --kr-up:#e66767; --kr-dn:#3987e5; --ma5:#e86bb8; --ma20:#f0b23a; --ma60:#9b86e8; --ma120:#a3a29b; color-scheme:dark}}
 :root[data-theme="dark"]{
   --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
   --grid:#2c2c2a; --axis:#45443f; --ring:rgba(255,255,255,.08); --wash:#252523;
   --blue:#3987e5; --blue-wash:rgba(57,135,229,.16); --blue-soft:#1b2c43;
   --red:#e66767; --red-wash:rgba(230,103,103,.14); --red-soft:#3d2120;
   --warn:#fab219; --warn-soft:#3a2f14; --warn-ink:#fab219;
-  --kospi:#a3a29b; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --kr-up:#e66767; --kr-dn:#3987e5; color-scheme:dark}
+  --kospi:#a3a29b; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --kr-up:#e66767; --kr-dn:#3987e5; --ma5:#e86bb8; --ma20:#f0b23a; --ma60:#9b86e8; --ma120:#a3a29b; color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--page);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.55;letter-spacing:-.005em;
@@ -170,6 +170,9 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--ink);padding-left:10px}
 .ch-head h2{margin:0}
 .unit{font-size:11px;color:var(--muted)}
 .mbox{position:relative;height:220px}
+.malg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:11.5px;color:var(--ink2);margin:8px 0 4px}
+.malg i{display:inline-block;width:12px;height:2.5px;border-radius:2px;vertical-align:3px;margin-right:4px}
+.malg b{font-weight:600;color:var(--ink)}
 .msg{font-size:13px;color:var(--ink2);margin:0;line-height:1.6}
 /* 경기지표 */
 .chips{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0 0 12px}
@@ -687,7 +690,7 @@ const WK='일월화수목금토';
 const dLabel=s=>{const t=new Date(s+'T00:00:00');return s.replace(/-/g,'.')+' ('+WK[t.getDay()]+')';};
 function lineCfg({lab,ds,tick,fmt,title,refs=[],step=false,ymin,ymax}){
   const K=SC();
-  return {type:'line',data:{labels:lab,datasets:ds.map((s,k)=>({label:s.name,data:s.data,borderColor:s.color||K.c[k],backgroundColor:s.color||K.c[k],borderWidth:2,pointRadius:0,
+  return {type:'line',data:{labels:lab,datasets:ds.map((s,k)=>({label:s.name,data:s.data,borderColor:s.color||K.c[k],backgroundColor:s.color||K.c[k],borderWidth:s.width||2,noEnd:!!s.noEnd,order:s.order||0,pointRadius:0,
       pointHoverRadius:4,pointHoverBorderWidth:2,pointHoverBorderColor:K.surf,pointHoverBackgroundColor:s.color||K.c[k],tension:step?0:.2,stepped:step?'before':false,spanGaps:true,borderJoinStyle:'round',borderCapStyle:'round'}))},
     options:{responsive:true,maintainAspectRatio:false,animation:false,layout:{padding:{right:10,top:4}},interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},tooltip:tipOf(title,fmt)},
@@ -699,6 +702,11 @@ const segHTML=(id,opts,curv)=>'<div class="seg" role="group" id="'+id+'">'+opts.
 const getPref=(k,def)=>{try{return localStorage.getItem(k)||def}catch(e){return def}};
 const setPref=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 
+/* 이동평균선: 최근 n거래일 종가 평균 (빈 날은 건너뜀) */
+const MAS=[[5,'--ma5'],[20,'--ma20'],[60,'--ma60'],[120,'--ma120']];
+const maSeries=(a,n)=>{const out=new Array(a.length).fill(null),buf=[];let sum=0;
+  for(let i=0;i<a.length;i++){const v=a[i];if(v==null)continue;buf.push(v);sum+=v;if(buf.length>n)sum-=buf.shift();if(buf.length===n)out[i]=sum/n;}return out;};
+const maLegend=a=>'<div class="malg">'+MAS.map(([n,v])=>{const m=maSeries(a,n),i=lastI(m);return '<span><i style="background:var('+v+')"></i>'+n+'일 <b>'+(i<0?'–':nf(m[i],2))+'</b></span>';}).join('')+'</div>';
 /* ───────── 일별현황 탭 ───────── */
 let drange=getPref('drange','6'); if(!['3','6','12','24'].includes(drange)) drange='6';   // 예전에 고른 3년·5년이 남아 있으면 6개월로
 function renderDay(){
@@ -737,7 +745,7 @@ function renderDay(){
     const i=lastI(a), j=prevI(a,i);
     return '<section class="card"><div class="ch-head"><h2>'+title+'</h2><span class="unit">'+unit+'</span></div>'+
       '<div class="kv"><span class="big2">'+nf(a[i],dec)+'</span><span class="sub2">'+(full?'':'전일 대비 '+(j>=0?arrow(a[i]-a[j],dec):'–')+' · ')+d[i].slice(5).replace('-','.')+' 기준'+(note||'')+'</span></div>'+
-      (full?cmp3(a,dec,kr):'')+'<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
+      (full?cmp3(a,dec,kr):'')+(kr?maLegend(a):'')+'<div class="mbox"><canvas id="'+id+'"></canvas></div></section>';
   };
   el.innerHTML=
     '<div class="dayhead"><b>'+dLabel(d[iK])+'</b><span>장 마감 기준</span></div>'+
@@ -755,10 +763,12 @@ function drawDay(){
   const from=new Date(end); from.setMonth(from.getMonth()-(+drange));
   let st=d.findIndex(x=>new Date(x+'T00:00:00')>=from); if(st<0) st=0;
   const lab=d.slice(st), K=SC();
-  const one=(key,id,name,dec,refs,color)=>{const a=C[key];if(!a)return;
-    mk(id,document.getElementById(id),lineCfg({lab,ds:[{name,data:a.slice(st),color}],tick:dayTick(lab),fmt:v=>nf(v,dec),title:i=>dLabel(lab[i]),refs}));};
-  one('코스피','c-kospi','코스피',2,[],K.c[0]);
-  one('코스닥','c-kosdaq','코스닥',2,[],K.c[2]);
+  const one=(key,id,name,dec,refs,color,ma)=>{const a=C[key];if(!a)return;
+    const ds=[{name,data:a.slice(st),color}];
+    if(ma) MAS.forEach(([n,v])=>ds.push({name:n+'일선',data:maSeries(a,n).slice(st),color:css(v),width:1.3,noEnd:true,order:1}));   // 이평은 전체 기간으로 계산한 뒤 보이는 구간만
+    mk(id,document.getElementById(id),lineCfg({lab,ds,tick:dayTick(lab),fmt:v=>nf(v,dec),title:i=>dLabel(lab[i]),refs}));};
+  one('코스피','c-kospi','코스피',2,[],K.c[0],true);
+  one('코스닥','c-kosdaq','코스닥',2,[],K.c[2],true);
   one('환율','c-fx','환율',1,[],K.c[0]);
   one('뉴스심리','c-news','뉴스심리',1,[100],K.c[1]);
 }
